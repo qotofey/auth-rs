@@ -1,18 +1,18 @@
 use crate::{
     config::Config,
-    providers,
-}
+    providers::HasherProvider,
+};
 
-pub struct Container<C>
+pub struct Container<H>
 where
-    C: Config,
+    H: HasherProvider,
 {
-    pub get_config: C,
+    pub hasher_provider: H,
 }
 
-impl<C> Container<C> {
-    pub fn new(config: C) -> Self {
-        Self { config }
+impl<H> Container<H> {
+    pub fn new(hasher_provider: H) -> Self {
+        Self { hasher_provider }
     }
 }
 

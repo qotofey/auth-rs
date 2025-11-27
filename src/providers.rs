@@ -13,22 +13,22 @@ use argon2::{
 };
 
 pub trait HashFuncProvider {
-    fn provide(&self, password: String) -> String;
+    fn provide(&self, password: &str) -> String;
 }
 
 pub struct Argon2Provider;
 
 impl Argon2Provider {
     // TODO: добавить параметры argon2
-    pub fn new() -> Self {
-        Self
-    }
+    // #[must_use]
+    // pub fn new() -> Self {
+    //     Self
+    // }
 }
 
 impl HashFuncProvider for Argon2Provider {
-    fn provide(&self, password: String) -> String {
+    fn provide(&self, password: &str) -> String {
         let salt = SaltString::generate(&mut OsRng);
-        println!("{salt}");
         // TODO: 
         // 1 - избавиться от магических чисел
         // 2 - избавиться от unwrap
@@ -54,10 +54,10 @@ mod tests {
         let argon2_provider = Argon2Provider;
 
         // When
-        let res = argon2_provider.provide("!Qwerty123".to_owned());
+        let password_digest = argon2_provider.provide("!Qwerty123");
 
         // Then
-        assert_ne!(res, "!Qwerty123".to_owned());
+        assert_ne!(password_digest, "!Qwerty123");
     }
 
     #[tokio::test]
@@ -66,8 +66,8 @@ mod tests {
         let argon2_provider = Argon2Provider;
 
         // When
-        let res1 = argon2_provider.provide("!Qwerty123".to_owned());
-        let res2 = argon2_provider.provide("!Qwerty123".to_owned());
+        let res1 = argon2_provider.provide("!Qwerty123");
+        let res2 = argon2_provider.provide("!Qwerty123");
 
         // Then
         assert_ne!(res1, res2);
@@ -79,7 +79,7 @@ mod tests {
         let argon2_provider = Argon2Provider;
 
         // When
-        let password_digest = argon2_provider.provide("!Qwerty123".to_owned());
+        let password_digest = argon2_provider.provide("!Qwerty123");
         let parsed_hash = argon2::PasswordHash::new(&password_digest).unwrap();
         let parsed_params = argon2::Params::try_from(&parsed_hash).unwrap(); 
 

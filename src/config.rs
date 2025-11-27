@@ -6,6 +6,7 @@ pub struct Config {
 }
 
 impl Config {
+    #[must_use]
     pub fn init() -> Self {
         let database_url = env::var("DATABASE_URL").expect("DATABASE_URL должен быть заполнен");
 
@@ -17,7 +18,7 @@ impl Config {
                     _ => false,
                 }
             },
-            Err(_) => true,
+            _ => true,
         };
 
         Self {

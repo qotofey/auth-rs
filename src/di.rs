@@ -1,9 +1,7 @@
 use crate::{
     app::commands::{
-        hash_password::CreatePasswordHash,
         register_user::{RegisterUser, RegisterUserDao},
     },
-    // config::Config,
     providers::HashFuncProvider,
 };
 

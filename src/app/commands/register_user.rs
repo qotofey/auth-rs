@@ -24,7 +24,12 @@ where
     }
 
     pub async fn call(&self, username: String, password: String) -> Result<(), AppError> {
-        let password_digest = self.hash_func_provider.provide(&password.trim().to_owned());
+        let password_digest = match self.hash_func_provider.provide(password.trim().to_string()) {
+            Some(hash) => hash,
+            None => {
+                return Err(AppError::UnknownError);
+            }, 
+        };
 
         self.repo.create(username.trim().to_lowercase(), password_digest).await?;
 

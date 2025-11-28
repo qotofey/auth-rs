@@ -5,7 +5,12 @@ edition = "2024"
 
 [dependencies]
 argon2 = { version = "0.5.3", features = ["std"] }
+base64 = "0.22.1"
 dotenvy = "0.15.7"
+getrandom = "0.3.4"
+hex = "0.4.3"
+jsonwebtoken = { version = "10.2.0", features = ["rust_crypto"] }
+serde = { version = "1.0.228", features = ["derive"] }
 sqlx = { version = "0.8.6", features = [
   "derive",
   "postgres",

@@ -25,7 +25,7 @@ mod tests {
         let token = id_provider.provide().unwrap();
 
         // Then
-        assert_ne!(token, "!Qwerty123".to_owned());
+        assert_eq!(token.len(), 64);
     }
 
     #[test]

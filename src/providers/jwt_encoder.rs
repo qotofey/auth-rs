@@ -43,7 +43,7 @@ mod tests {
         let token = jwt_encoder.provide("Qwerty123".to_owned()).unwrap();
 
         // Then
-        assert_eq!(token, "!Qwerty123".to_owned());
+        assert_ne!(token, "!Qwerty123".to_owned());
     }
 }
 

@@ -9,9 +9,9 @@ pub mod errors;
 
 #[tokio::main]
 async fn main() {
-    dotenvy::dotenv().ok();
     let conf = config::Config::init();
-    println!("DATABASE_URL={}", conf.database_url);
+    println!("DATABASE_URL={}", &conf.database_url);
+    println!("SERVER_URL={}:{}", conf.server.host, conf.server.port);
     let db_pool = sqlx::postgres::PgPoolOptions::new().max_connections(5).connect(&conf.database_url).await.unwrap();
 
     let argon2_hasher = providers::argon2_hasher::Argon2HasherProvider;

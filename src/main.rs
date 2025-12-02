@@ -29,7 +29,7 @@ async fn main() {
         user_repo,
     );
     // container.register_user_command.call("\tqotofey    \r\n".to_string(), "\t Qwerty123!    \n".to_string()).await.unwrap();
-    let res = container.authenticate_user_command.call("qotofey".to_string(), "Qwerty123!".to_string()).await.unwrap();
-    println!("Refresh Token = {} \nAccess Token = {}", res.0, res.1);
+    let res = container.authenticate_user_command.call("qotofey".to_string(), "   Qwerty123!".to_string()).await.unwrap();
+    println!("Refresh Token = {} \nAccess Token = {}", res.refresh_token, res.access_token);
 }
 

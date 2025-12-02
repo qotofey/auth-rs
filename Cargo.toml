@@ -6,18 +6,15 @@ edition = "2024"
 [dependencies]
 argon2 = { version = "0.5.3", features = ["std"] }
 base64 = "0.22.1"
+chrono = "0.4.42"
 config = "0.15.19"
 dotenvy = "0.15.7"
 getrandom = "0.3.4"
 hex = "0.4.3"
 jsonwebtoken = { version = "10.2.0", features = ["rust_crypto"] }
 serde = { version = "1.0.228", features = ["derive"] }
-sqlx = { version = "0.8.6", features = [
-  "derive",
-  "postgres",
-  "runtime-tokio-native-tls",
-  "uuid",
-] }
+sqlx = { version = "0.8.6", features = ["chrono", "derive", "postgres", "runtime-tokio-native-tls", "uuid"] }
 thiserror = "2.0.17"
 tokio = { version = "1.48.0", features = ["full"] }
+uuid = "1.18.1"
 validator = { version = "0.20.0", features = ["derive"] }

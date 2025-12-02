@@ -7,6 +7,7 @@ pub enum AppError {
     WeakPassword,
     UnknownError,
     LoginError,
+    TempLocked,
 }
 
 impl Display for AppError {
@@ -16,7 +17,8 @@ impl Display for AppError {
             AppError::UnknownDatabaseError => write!(f, "Unknown database error"),
             AppError::UnknownError => write!(f, "Unknown system error"),
             AppError::WeakPassword => write!(f, "Weak password"),
-            AppError::LoginError => write!(f, "Incorrect login or password")
+            AppError::LoginError => write!(f, "Incorrect login or password"),
+            AppError::TempLocked => write!(f, "Temporarily locked"),
         }
     }
 }

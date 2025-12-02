@@ -10,7 +10,6 @@ use crate::{
 };
 
 pub trait RefreshSessionDao {
-    // add code here
     async fn refresh_session(&self, old_refresh_token: String, new_refresh_token: String) -> Result<Option<UserCredential>, sqlx::Error>;
 }
 
@@ -43,10 +42,18 @@ where
     pub async fn call(&self, old_refresh_token: String) -> Result<Session, AppError> {
         let new_refresh_token = match self.id_provider.provide() {
             Some(token) => token,
-            None => return Err(AppError::UnknownError),
+            None => return Err(AppError::LoginRequired),
         };
-        // TODO: убрать анврапы
-        let credential = self.repo.refresh_session(old_refresh_token, new_refresh_token.clone()).await.unwrap().unwrap();
+
+        let result_some_credential_or_none = self.repo.refresh_session(old_refresh_token, new_refresh_token.clone()).await;
+        let some_credential_or_none = match result_some_credential_or_none {
+            Ok(some_credential_or_none) => some_credential_or_none,
+            Err(_) => return Err(AppError::UnknownDatabaseError),
+        };
+        let credential = match some_credential_or_none {
+            Some(credential) => credential,
+            None => return Err(AppError::LoginRequired)
+        };
 
         let access_token = match self.token_provider.provide(credential.user_id.to_string()) {
             Some(token) => token,

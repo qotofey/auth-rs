@@ -14,7 +14,6 @@ pub trait HashVerifierProvider {
 pub trait TokenProvider {
     fn provide(&self, user_id: String) -> Option<String>;
 }
-
 pub trait IdProvider {
     fn provide(&self) -> Option<String>;
 }

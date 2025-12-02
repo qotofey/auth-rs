@@ -148,17 +148,16 @@ impl RefreshSessionDao for UserRepository {
             Some(session) => session,
             None => return Ok(None), 
         };
-        
-        // по сессии определить credential ( + user, если понадобится больше полей в jwt)
-        // - если не подтверждён -> выкидываем + удалять куки
-        // - если не найден -> выкидываем на страницу логина + удалить куки
-        // - если заблокирован -> выкидываем на странциу логина + удалить куки
-        let result_some_credential_or_none = sqlx::query_as::<_, UserCredential>("SELECT id, kind, login, confirmed_at, user_id, login_attempts, locked_until FROM user_credentials WHERE created_at IS NOT NULL AND (locked_until IS NULL OR locked_until < CURRENT_TIMESTAMP) AND id = $1")
+        // TODO: по сессии определить credential ( + user, если понадобится больше полей в jwt)
+        let some_credential_or_none = sqlx::query_as::<_, UserCredential>("SELECT id, kind, login, confirmed_at, user_id, login_attempts, locked_until FROM user_credentials WHERE confirmed_at IS NOT NULL AND (locked_until IS NULL OR locked_until < CURRENT_TIMESTAMP) AND id = $1")
             .bind(session.user_credential_id)
             .fetch_optional(&mut *transaction)
-            .await;
+            .await?;
+        let credential = match some_credential_or_none {
+            Some(credential) => credential,
+            None => return Ok(None),
+        };
 
-        // сохранит новую сессию и...
         sqlx::query("INSERT INTO user_sessions (refresh_token, user_credential_id) VALUES ($1, $2)")
             .bind(new_refresh_token)
             .bind(session.user_credential_id)
@@ -166,6 +165,6 @@ impl RefreshSessionDao for UserRepository {
             .await?;
         transaction.commit().await?;
 
-        result_some_credential_or_none
+        Ok(Some(credential))
     }
 }

@@ -26,10 +26,31 @@ async fn main() {
         refresh_token_generator,
         jwt_encoder,
         user_repo.clone(),
+        user_repo.clone(),
         user_repo,
     );
-    // container.register_user_command.call("\tqotofey    \r\n".to_string(), "\t Qwerty123!    \n".to_string()).await.unwrap();
-    let res = container.authenticate_user_command.call("qotofey".to_string(), "   Qwerty123!".to_string()).await.unwrap();
+    let res = container.register_user_command.call("\tusertest0\r\n".to_string(), "\t Qwerty123!    \n".to_string()).await.unwrap();
+    let res = container.authenticate_user_command.call("qotofey  ".to_string(), "   Qwerty123!".to_string()).await.unwrap();
+
+    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
+    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
+    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
+    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
+    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
+    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
+    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
+    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
+    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
+    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
+    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
+    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
+    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
+    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
+    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
+    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
+    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
+    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
+
     println!("Refresh Token = {} \nAccess Token = {}", res.refresh_token, res.access_token);
 }
 

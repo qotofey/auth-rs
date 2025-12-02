@@ -1,5 +1,6 @@
 use crate::providers::IdProvider;
 
+#[derive(Clone)]
 pub struct RefreshTokenGeneratorProvider;
 
 impl IdProvider for RefreshTokenGeneratorProvider {

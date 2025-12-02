@@ -3,7 +3,8 @@ use crate::{
     errors::AppError,
     app::commands::{
         register_user::RegisterUserDao,
-        authenticate_user::{AuthenticateUserDao, UserCredential, UserSecret},
+        authenticate_user::{AuthenticateUserDao, UserSecret},
+        refresh_session::{RefreshSessionDao, UserSession},
     },
 };
 
@@ -21,6 +22,18 @@ impl UserRepository {
 #[derive(sqlx::FromRow)]
 pub struct User {
     pub id: sqlx::types::uuid::Uuid,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct UserCredential {
+    pub id: uuid::Uuid,
+    pub kind: Option<String>,
+    pub login: String,
+    pub confirmed_at: Option<chrono::NaiveDateTime>,
+    pub user_id: uuid::Uuid,
+    #[sqlx(rename = "login_attempts")]
+    pub failure_login_attempts: i16,
+    pub locked_until: Option<chrono::NaiveDateTime>,
 }
 
 impl RegisterUserDao for UserRepository {
@@ -97,8 +110,8 @@ impl AuthenticateUserDao for UserRepository {
                     login_attempts = 0, 
                     locked_until = NULL,
                     confirmed_at = COALESCE(confirmed_at, CURRENT_TIMESTAMP) 
-                WHERE id = $1"#
-            )
+                WHERE id = $1
+            "#)
             .bind(user_credential_id)
             .execute(&mut *transaction)
             .await?;
@@ -114,5 +127,44 @@ impl AuthenticateUserDao for UserRepository {
         transaction.commit().await?;
 
         Ok(())
+    }
+}
+
+impl RefreshSessionDao for UserRepository {
+    async fn refresh_session(&self, old_refresh_token: String, new_refresh_token: String) -> Result<Option<UserCredential>, sqlx::Error> {
+        let mut transaction = self.pool.begin().await?;
+        let some_session_or_none = sqlx::query_as::<_, UserSession>(r#"
+                UPDATE user_sessions 
+                SET 
+                    deleted_at = CURRENT_TIMESTAMP 
+                WHERE 
+                    refresh_token = $1 AND deleted_at IS NULL
+                RETURNING user_credential_id
+            "#)
+            .bind(old_refresh_token)
+            .fetch_optional(&mut *transaction)
+            .await?;
+        let session = match some_session_or_none {
+            Some(session) => session,
+            None => return Ok(None), 
+        };
+        // TODO: по сессии определить credential ( + user, если понадобится больше полей в jwt)
+        let some_credential_or_none = sqlx::query_as::<_, UserCredential>("SELECT id, kind, login, confirmed_at, user_id, login_attempts, locked_until FROM user_credentials WHERE confirmed_at IS NOT NULL AND (locked_until IS NULL OR locked_until < CURRENT_TIMESTAMP) AND id = $1")
+            .bind(session.user_credential_id)
+            .fetch_optional(&mut *transaction)
+            .await?;
+        let credential = match some_credential_or_none {
+            Some(credential) => credential,
+            None => return Ok(None),
+        };
+
+        sqlx::query("INSERT INTO user_sessions (refresh_token, user_credential_id) VALUES ($1, $2)")
+            .bind(new_refresh_token)
+            .bind(session.user_credential_id)
+            .execute(&mut *transaction)
+            .await?;
+        transaction.commit().await?;
+
+        Ok(Some(credential))
     }
 }

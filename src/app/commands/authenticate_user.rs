@@ -5,7 +5,9 @@ use crate::{
         HashVerifierProvider, 
         IdProvider, 
         TokenProvider,
-    }
+    },
+    app::commands::Session,
+    adapters::postgres::UserCredential,
 };
 
 const LOGIN_ATTEMPTS_BEFORE_FIRST_LOCKING: u16 = 5;
@@ -13,27 +15,10 @@ const LOGIN_ATTEMPTS_AFTER_FIRST_LOCKING: u16 = 3;
 const LOCKING_IN_MINUTES: i64 = 3;
 
 #[derive(sqlx::FromRow)]
-pub struct UserCredential {
-    pub id: uuid::Uuid,
-    pub kind: Option<String>,
-    pub login: String,
-    pub confirmed_at: Option<chrono::NaiveDateTime>,
-    pub user_id: uuid::Uuid,
-    #[sqlx(rename = "login_attempts")]
-    pub failure_login_attempts: i16,
-    pub locked_until: Option<chrono::NaiveDateTime>,
-}
-
-#[derive(sqlx::FromRow)]
 pub struct UserSecret {
     #[sqlx(try_from = "uuid::Uuid")]
     pub user_id: String,
     pub password_digest: String,
-}
-
-pub struct Session {
-    pub access_token: String,
-    pub refresh_token: String,
 }
 
 pub trait AuthenticateUserDao {

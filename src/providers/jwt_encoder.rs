@@ -8,6 +8,7 @@ pub struct Claims {
     iat: u64,
 }
 
+#[derive(Clone)]
 pub struct JwtEncoderProvider;
 
 impl TokenProvider for JwtEncoderProvider {

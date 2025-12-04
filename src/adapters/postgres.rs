@@ -128,6 +128,16 @@ impl AuthenticateUserDao for UserRepository {
 
         Ok(())
     }
+
+    async fn upgrade_password_digest(&self, user_secret_id: uuid::Uuid, new_password_digest: String) -> Result<(), sqlx::Error> {
+        sqlx::query("UPDATE user_passwords SET password_digest = $1 WHERE id = $2")
+            .bind(new_password_digest)
+            .bind(user_secret_id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
+    }
 }
 
 impl RefreshSessionDao for UserRepository {

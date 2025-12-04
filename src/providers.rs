@@ -7,8 +7,13 @@ pub trait HashFuncProvider {
     fn provide(&self, password: String) -> Option<String>;
 }
 
+pub struct PasswordConfirmation {
+    pub is_confirmed: bool,
+    pub need_upgrade: bool, 
+}
+
 pub trait HashVerifierProvider {
-    fn provide(&self, password: String, password_digest: String) -> bool;
+    fn provide(&self, password: String, password_digest: String) -> PasswordConfirmation;
 }
 
 pub trait TokenProvider {

@@ -24,7 +24,7 @@ where
     }
 
     pub async fn call(&self, username: String, password: String) -> Result<(), AppError> {
-        let password_digest = match self.hash_func_provider.provide(password.trim().to_string()) {
+        let password_digest = match self.hash_func_provider.provide(password) {
             Some(hash) => hash,
             None => {
                 return Err(AppError::UnknownError);

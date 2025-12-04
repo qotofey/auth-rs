@@ -11,22 +11,24 @@ use argon2::{
 };
 use crate::providers::HashFuncProvider;
 
-pub struct Argon2HasherProvider;
+#[derive(Clone)]
+pub struct Argon2HasherProvider {
+    memory_cost: u32,
+    time_cost: u32,
+    parallelism: u32,
+}
 
 impl Argon2HasherProvider {
-    // TODO: добавить параметры argon2
-    // #[must_use]
-    // pub fn new() -> Self {
-    //     Self
-    // }
+    pub fn new(memory_cost: u32, time_cost: u32, parallelism: u32) -> Self {
+        Self { memory_cost, time_cost, parallelism }
+    }
 }
 
 impl HashFuncProvider for Argon2HasherProvider {
     fn provide(&self, password: String) -> Option<String> {
         let salt = SaltString::generate(&mut OsRng);
-        // TODO: 
-        // 1 - избавиться от магических чисел
-        let params = match Params::new(32768, 2, 1, None) {
+
+        let params = match Params::new(self.memory_cost, self.time_cost, self.parallelism, None) {
             Ok(params) => params,
             Err(_) => {
                 // TODO: add logger
@@ -57,7 +59,7 @@ mod tests {
     #[tokio::test]
     async fn get_password_hash() {
         // Given
-        let argon2_hasher = Argon2HasherProvider;
+        let argon2_hasher = Argon2HasherProvider::new(8, 1, 1);
 
         // When
         let password_digest = argon2_hasher.provide("!Qwerty123".to_owned()).unwrap();
@@ -69,7 +71,7 @@ mod tests {
     #[tokio::test]
     async fn get_two_different_password_hash() {
         // Given
-        let argon2_hasher = Argon2HasherProvider;
+        let argon2_hasher = Argon2HasherProvider::new(8, 1, 1);
 
         // When
         let res1 = argon2_hasher.provide("!Qwerty123".to_string()).unwrap();
@@ -82,7 +84,7 @@ mod tests {
     #[tokio::test]
     async fn get_params_from_password_hash() {
         // Given
-        let argon2_hasher = Argon2HasherProvider;
+        let argon2_hasher = Argon2HasherProvider::new(8, 2, 1);
 
         // When
         let password_digest = argon2_hasher.provide("!Qwerty123".to_string()).unwrap();
@@ -90,7 +92,7 @@ mod tests {
         let parsed_params = argon2::Params::try_from(&parsed_hash).unwrap(); 
 
         // Then
-        assert_eq!(parsed_params.m_cost(), 32768);
+        assert_eq!(parsed_params.m_cost(), 8);
         assert_eq!(parsed_params.t_cost(), 2);
         assert_eq!(parsed_params.p_cost(), 1);
     }

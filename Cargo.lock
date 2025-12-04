@@ -74,7 +74,6 @@ dependencies = [
  "config",
  "dotenvy",
  "getrandom 0.3.4",
- "hex",
  "jsonwebtoken",
  "serde",
  "sqlx",

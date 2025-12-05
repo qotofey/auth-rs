@@ -2,8 +2,11 @@ use sqlx::FromRow;
 use crate::{
     errors::AppError,
     app::commands::{
+        AuthenticateUserDao,
+        ChangePasswordDao, 
+        UserSecret,
+        UserCredential,
         register_user::RegisterUserDao,
-        authenticate_user::{AuthenticateUserDao, UserSecret},
         refresh_session::{RefreshSessionDao, UserSession},
     },
 };
@@ -22,18 +25,6 @@ impl UserRepository {
 #[derive(sqlx::FromRow)]
 pub struct User {
     pub id: sqlx::types::uuid::Uuid,
-}
-
-#[derive(sqlx::FromRow)]
-pub struct UserCredential {
-    pub id: uuid::Uuid,
-    pub kind: Option<String>,
-    pub login: String,
-    pub confirmed_at: Option<chrono::NaiveDateTime>,
-    pub user_id: uuid::Uuid,
-    #[sqlx(rename = "login_attempts")]
-    pub failure_login_attempts: i16,
-    pub locked_until: Option<chrono::NaiveDateTime>,
 }
 
 impl RegisterUserDao for UserRepository {
@@ -84,13 +75,6 @@ impl AuthenticateUserDao for UserRepository {
             .await
     }
 
-    async fn find_user_secret_by_user_id(&self, id: uuid::Uuid) -> Result<Option<UserSecret>, sqlx::Error> {
-        sqlx::query_as::<_, UserSecret>("SELECT * FROM user_passwords WHERE user_id = $1")
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await
-    }
-
     async fn update_failure_login(&self, id: uuid::Uuid, actual_failure_login_attempts: u16, locked_until: Option<chrono::NaiveDateTime>) -> Result<(), sqlx::Error> {
         sqlx::query("UPDATE user_credentials SET login_attempts = $1, locked_until = $2 WHERE id = $3")
             .bind(actual_failure_login_attempts as i16)
@@ -125,16 +109,6 @@ impl AuthenticateUserDao for UserRepository {
             .execute(&mut *transaction)
             .await?;
         transaction.commit().await?;
-
-        Ok(())
-    }
-
-    async fn upgrade_password_digest(&self, user_secret_id: uuid::Uuid, new_password_digest: String) -> Result<(), sqlx::Error> {
-        sqlx::query("UPDATE user_passwords SET password_digest = $1 WHERE id = $2")
-            .bind(new_password_digest)
-            .bind(user_secret_id)
-            .execute(&self.pool)
-            .await?;
 
         Ok(())
     }
@@ -176,5 +150,23 @@ impl RefreshSessionDao for UserRepository {
         transaction.commit().await?;
 
         Ok(Some(credential))
+    }
+}
+
+impl ChangePasswordDao for UserRepository {
+    async fn find_user_secret_by_user_id(&self, id: uuid::Uuid) -> Result<Option<UserSecret>, sqlx::Error> {
+        sqlx::query_as::<_, UserSecret>("SELECT * FROM user_passwords WHERE user_id = $1")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await
+    }
+
+    async fn upgrade_password_digest(&self, user_secret_id: uuid::Uuid, new_password_digest: String) -> Result<(), sqlx::Error> {
+        sqlx::query("UPDATE user_passwords SET password_digest = $1 WHERE id = $2")
+            .bind(new_password_digest)
+            .bind(user_secret_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
     }
 }

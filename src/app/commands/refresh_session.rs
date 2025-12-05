@@ -5,8 +5,10 @@ use crate::{
         IdProvider, 
         TokenProvider,
     },
-    app::commands::Session,
-    adapters::postgres::UserCredential,
+    app::commands::{
+        Session,
+        UserCredential,
+    },
 };
 
 pub trait RefreshSessionDao {
@@ -61,6 +63,7 @@ where
         };
 
         let refresh_token = new_refresh_token;
-        Ok(Session { refresh_token, access_token })
+        let user_id = credential.user_id;
+        Ok(Session { user_id, refresh_token, access_token })
     }
 }

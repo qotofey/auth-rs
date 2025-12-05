@@ -1,4 +1,3 @@
-use sqlx::types::uuid;
 use crate::{
     errors::AppError,
     providers::{
@@ -7,30 +6,17 @@ use crate::{
         IdProvider, 
         TokenProvider,
     },
-    app::commands::Session,
-    adapters::postgres::UserCredential,
+    app::commands::{
+        LOGIN_ATTEMPTS_BEFORE_FIRST_LOCKING,
+        LOGIN_ATTEMPTS_AFTER_FIRST_LOCKING,
+        LOCKING_IN_MINUTES,
+        Session,
+        UserSecret,
+        UserCredential,
+        AuthenticateUserDao,
+        ChangePasswordDao,
+    },
 };
-
-const LOGIN_ATTEMPTS_BEFORE_FIRST_LOCKING: u16 = 5;
-const LOGIN_ATTEMPTS_AFTER_FIRST_LOCKING: u16 = 3;
-const LOCKING_IN_MINUTES: i64 = 3;
-
-#[derive(sqlx::FromRow)]
-pub struct UserSecret {
-    pub id: uuid::Uuid,
-    #[sqlx(try_from = "uuid::Uuid")]
-    pub user_id: String,
-    pub password_digest: String,
-}
-
-pub trait AuthenticateUserDao {
-    async fn find_user_credential_by_login(&self, login: String) -> Result<Option<UserCredential>, sqlx::Error>;
-    // TODO: если не найдена запись - паникаовать
-    async fn find_user_secret_by_user_id(&self, id: uuid::Uuid) -> Result<Option<UserSecret>, sqlx::Error>; 
-    async fn update_failure_login(&self, id: uuid::Uuid, actual_failure_login_attempts: u16, locked_until: Option<chrono::NaiveDateTime>) -> Result<(), sqlx::Error>;
-    async fn create_session(&self, user_credential_id: uuid::Uuid, refresh_token: String) -> Result<(), sqlx::Error>;
-    async fn upgrade_password_digest(&self, user_secret_id: uuid::Uuid, new_password_digest: String) -> Result<(), sqlx::Error>;
-}
 
 pub struct AuthenticateUser<H, V, I, T, A>
 where
@@ -38,7 +24,7 @@ where
     V: HashVerifierProvider,
     I: IdProvider,
     T: TokenProvider,
-    A: AuthenticateUserDao,
+    A: AuthenticateUserDao + ChangePasswordDao,
 {
     hash_func_provider: H,
     hash_verifier_provider: V,
@@ -53,7 +39,7 @@ where
     V: HashVerifierProvider,
     I: IdProvider,
     T: TokenProvider,
-    A: AuthenticateUserDao,
+    A: AuthenticateUserDao + ChangePasswordDao,
 {
     pub fn new(hash_func_provider: H, hash_verifier_provider: V, refresh_token_generator: I, access_token_provider: T, repo: A) -> Self {
         Self {
@@ -97,15 +83,15 @@ where
         if !is_password_correct {
             let actual_failure_login_attempts = credentail.failure_login_attempts as u16 + 1;
             let is_subject_locking = 
-                actual_failure_login_attempts >= LOGIN_ATTEMPTS_BEFORE_FIRST_LOCKING && 
+                actual_failure_login_attempts >= LOGIN_ATTEMPTS_BEFORE_FIRST_LOCKING &&
                 (actual_failure_login_attempts - LOGIN_ATTEMPTS_BEFORE_FIRST_LOCKING) % LOGIN_ATTEMPTS_AFTER_FIRST_LOCKING == 0;
 
             // TODO: eсли тут вернётся None блокировка не будет инкрементирована
             let locked_until = if is_subject_locking { 
                 // TODO: обдумать алгоритм распределения времени блокировки
                 chrono::Utc::now().naive_local().checked_add_signed(chrono::Duration::minutes(LOCKING_IN_MINUTES)) 
-            } else { 
-                None 
+            } else {
+                None
             };
             match self.repo.update_failure_login(credentail.id, actual_failure_login_attempts, locked_until).await {
                 Ok(_) => if is_locked { return Err(AppError::TempLocked); },
@@ -128,7 +114,6 @@ where
                 Err(_) => return Err(AppError::UnknownDatabaseError),
             }
         }
-        println!("! before refresh_token_generator()");
 
         let refresh_token = match self.refresh_token_generator.provide() {
             Some(token) => token,
@@ -140,8 +125,9 @@ where
             None => return Err(AppError::UnknownError),
         };
 
+        let user_id = credentail.user_id;
         match self.repo.create_session(credentail.id, refresh_token.clone()).await {
-            Ok(_) => Ok(Session { refresh_token, access_token }),
+            Ok(_) => Ok(Session { user_id, refresh_token, access_token }),
             Err(_) => Err(AppError::UnknownDatabaseError),
         }
     }

@@ -9,7 +9,7 @@ pub mod errors;
 
 const DATABASE_MAX_CONNECTIONS: u32 = 5;
 const ARGON2_MEMORY_COST: u32 = 8;//32768;
-const ARGON2_TIME_COST: u32 = 1;
+const ARGON2_TIME_COST: u32 = 2;
 const ARGON2_PARALLELISM: u32 = 1;
 
 #[tokio::main]
@@ -37,24 +37,14 @@ async fn main() {
     );
     // let res = container.register_user_command.call("\tusertest0\r\n".to_string(), "Qwerty123!".to_string()).await.unwrap();
     let res = container.authenticate_user_command.call("qotofey  ".to_string(), "Qwerty123!".to_string()).await.unwrap();
-
     let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
     let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
     let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
+    let _ = container.change_password_command.call(res.user_id, "Qwerty123!".to_string(), "123123".to_string()).await.unwrap();
+    let res = container.authenticate_user_command.call("qotofey".to_string(), "123123".to_string()).await.unwrap();
     let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
     let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
-    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
-    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
-    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
-    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
-    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
-    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
-    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
-    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
-    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
-    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
-    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
-    let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
+    let _ = container.change_password_command.call(res.user_id, "123123".to_string(), "Qwerty123!".to_string()).await.unwrap();
     let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
 
     println!("Refresh Token = {} \nAccess Token = {}", res.refresh_token, res.access_token);

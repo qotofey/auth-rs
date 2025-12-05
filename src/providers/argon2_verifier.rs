@@ -4,6 +4,7 @@ use argon2::{
 };
 use crate::providers::{HashVerifierProvider, PasswordConfirmation};
 
+#[derive(Clone)]
 pub struct Argon2VerifierProvider {
     memory_cost: u32,
     time_cost: u32,

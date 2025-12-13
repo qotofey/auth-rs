@@ -2,6 +2,7 @@ pub mod register_user;
 pub mod authenticate_user;
 pub mod refresh_session;
 pub mod change_password;
+pub mod delete_user;
 
 pub const LOGIN_ATTEMPTS_BEFORE_FIRST_LOCKING: u16 = 5;
 pub const LOGIN_ATTEMPTS_AFTER_FIRST_LOCKING: u16 = 3;

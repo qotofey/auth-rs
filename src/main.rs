@@ -33,6 +33,7 @@ async fn main() {
         jwt_encoder,
         user_repo.clone(),
         user_repo.clone(),
+        user_repo.clone(),
         user_repo,
     );
     // let res = container.register_user_command.call("\tusertest0\r\n".to_string(), "Qwerty123!".to_string()).await.unwrap();
@@ -48,5 +49,6 @@ async fn main() {
     let res = container.refresh_session_command.call(res.refresh_token).await.unwrap();
 
     println!("Refresh Token = {} \nAccess Token = {}", res.refresh_token, res.access_token);
+    let _ = container.delete_user_command.call(res.user_id, "123123".to_string()).await.unwrap();
 }
 

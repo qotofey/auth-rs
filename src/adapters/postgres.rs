@@ -8,6 +8,7 @@ use crate::{
         UserCredential,
         register_user::RegisterUserDao,
         refresh_session::{RefreshSessionDao, UserSession},
+        delete_user::DeleteUserDao,
     },
 };
 
@@ -165,6 +166,16 @@ impl ChangePasswordDao for UserRepository {
         sqlx::query("UPDATE user_passwords SET password_digest = $1 WHERE id = $2")
             .bind(new_password_digest)
             .bind(user_secret_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+}
+
+impl DeleteUserDao for UserRepository {
+    async fn delete_user_by_id(&self, user_id: uuid::Uuid) -> Result<(), sqlx::Error> {
+        sqlx::query("UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1")
+            .bind(user_id)
             .execute(&self.pool)
             .await?;
         Ok(())

@@ -5,15 +5,15 @@ use crate::{
         HashVerifierProvider, 
     },
     app::commands::{
-        LOGIN_ATTEMPTS_BEFORE_FIRST_LOCKING,
-        LOGIN_ATTEMPTS_AFTER_FIRST_LOCKING,
-        LOCKING_IN_MINUTES,
+        // LOGIN_ATTEMPTS_BEFORE_FIRST_LOCKING,
+        // LOGIN_ATTEMPTS_AFTER_FIRST_LOCKING,
+        // LOCKING_IN_MINUTES,
         UserCredential,
         ChangePasswordDao,
     }
 };
 
-pub struct ChangePassword<H, V, C>
+pub struct ChangePasswordCommand<H, V, C>
 where
     H: HashFuncProvider,
     V: HashVerifierProvider,
@@ -24,7 +24,7 @@ where
     repo: C,
 }
 
-impl<H, V, C> ChangePassword<H, V, C>
+impl<H, V, C> ChangePasswordCommand<H, V, C>
 where
     H: HashFuncProvider,
     V: HashVerifierProvider,

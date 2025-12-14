@@ -18,7 +18,7 @@ use crate::{
     },
 };
 
-pub struct AuthenticateUser<H, V, I, T, A>
+pub struct AuthenticateUserCommand<H, V, I, T, A>
 where
     H: HashFuncProvider,
     V: HashVerifierProvider,
@@ -33,7 +33,7 @@ where
     repo: A,
 }
 
-impl<H, V, I, T, A> AuthenticateUser<H, V, I, T, A>
+impl<H, V, I, T, A> AuthenticateUserCommand<H, V, I, T, A>
 where
     H: HashFuncProvider,
     V: HashVerifierProvider,

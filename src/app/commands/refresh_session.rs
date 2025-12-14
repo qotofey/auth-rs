@@ -1,4 +1,3 @@
-use sqlx::types::uuid;
 use crate::{
     errors::AppError,
     providers::{
@@ -8,14 +7,11 @@ use crate::{
     app::commands::{
         Session,
         UserCredential,
+        RefreshSessionDao,
     },
 };
 
-pub trait RefreshSessionDao {
-    async fn refresh_session(&self, old_refresh_token: String, new_refresh_token: String) -> Result<Option<UserCredential>, sqlx::Error>;
-}
-
-pub struct RefreshSession<I, T, R>
+pub struct RefreshSessionCommand<I, T, R>
 where
     I: IdProvider,
     T: TokenProvider,
@@ -31,7 +27,7 @@ pub struct UserSession {
     pub user_credential_id: uuid::Uuid,
 }
 
-impl<I, T, R> RefreshSession<I, T, R> 
+impl<I, T, R> RefreshSessionCommand<I, T, R> 
 where
     I: IdProvider,
     T: TokenProvider,

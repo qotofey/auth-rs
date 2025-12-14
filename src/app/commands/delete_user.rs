@@ -1,13 +1,10 @@
 use crate::{
     errors::AppError,
     providers::HashVerifierProvider,
+    app::commands::DeleteUserDao,
 };
 
-pub trait DeleteUserDao {
-    async fn delete_user_by_id(&self, user_id: uuid::Uuid) -> Result<(), sqlx::Error>;
-}
-
-pub struct DeleteUser<V, D>
+pub struct SoftDeleteUserCommand<V, D>
 where
     V: HashVerifierProvider,
     D: DeleteUserDao,
@@ -16,7 +13,7 @@ where
     repo: D,
 }
 
-impl<V, D> DeleteUser<V, D>
+impl<V, D> SoftDeleteUserCommand<V, D>
 where
     V: HashVerifierProvider,
     D: DeleteUserDao,

@@ -1,12 +1,15 @@
 use crate::{
     app::commands::{
+        RegisterUserDao,
         AuthenticateUserDao,
-        ChangePasswordDao,
-        register_user::{RegisterUser, RegisterUserDao},
+        RefreshSessionDao,
+        ChangePasswordDao, 
+        DeleteUserDao,
+        register_user::RegisterUser,
         authenticate_user::AuthenticateUser,
-        refresh_session::{RefreshSession, RefreshSessionDao},
+        refresh_session::RefreshSession,
         change_password::ChangePassword,
-        delete_user::{DeleteUser, DeleteUserDao},
+        delete_user::DeleteUser,
     },
     providers::{HashFuncProvider, HashVerifierProvider, IdProvider, TokenProvider},
 };

@@ -1,8 +1,11 @@
+use crate::errors::AppError;
+
 pub mod register_user;
 pub mod authenticate_user;
 pub mod refresh_session;
 pub mod change_password;
 pub mod delete_user;
+pub mod restore_user;
 
 pub const LOGIN_ATTEMPTS_BEFORE_FIRST_LOCKING: u16 = 5;
 pub const LOGIN_ATTEMPTS_AFTER_FIRST_LOCKING: u16 = 3;
@@ -34,15 +37,31 @@ pub struct UserCredential {
     pub locked_until: Option<chrono::NaiveDateTime>,
 }
 
+pub trait RegisterUserDao {
+    async fn register_user(&self, login_type: String, login: String, password_digest: String) -> Result<(), AppError>;
+}
+
 pub trait AuthenticateUserDao {
     async fn find_user_credential_by_login(&self, login: String) -> Result<Option<UserCredential>, sqlx::Error>;
     async fn update_failure_login(&self, id: uuid::Uuid, actual_failure_login_attempts: u16, locked_until: Option<chrono::NaiveDateTime>) -> Result<(), sqlx::Error>;
     async fn create_session(&self, user_credential_id: uuid::Uuid, refresh_token: String) -> Result<(), sqlx::Error>;
 }
 
+pub trait RefreshSessionDao {
+    async fn refresh_session(&self, old_refresh_token: String, new_refresh_token: String) -> Result<Option<UserCredential>, sqlx::Error>;
+}
+
 pub trait ChangePasswordDao {
     // TODO: если не найдена запись - паникаовать
     async fn find_user_secret_by_user_id(&self, id: uuid::Uuid) -> Result<Option<UserSecret>, sqlx::Error>; 
     async fn upgrade_password_digest(&self, user_secret_id: uuid::Uuid, new_password_digest: String) -> Result<(), sqlx::Error>;
+}
+
+pub trait DeleteUserDao {
+    async fn delete_user_by_id(&self, user_id: uuid::Uuid) -> Result<(), sqlx::Error>;
+}
+
+pub trait RestoreUserDao {
+    async fn restore_user_by_id(&self, user_id: uuid::Uuid) -> Result<(), sqlx::Error>;
 }
 

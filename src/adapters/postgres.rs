@@ -2,13 +2,15 @@ use sqlx::FromRow;
 use crate::{
     errors::AppError,
     app::commands::{
+        RegisterUserDao,
         AuthenticateUserDao,
+        RefreshSessionDao,
         ChangePasswordDao, 
+        DeleteUserDao,
+        RestoreUserDao,
         UserSecret,
         UserCredential,
-        register_user::RegisterUserDao,
-        refresh_session::{RefreshSessionDao, UserSession},
-        delete_user::DeleteUserDao,
+        refresh_session::UserSession,
     },
 };
 
@@ -70,7 +72,14 @@ impl RegisterUserDao for UserRepository {
 
 impl AuthenticateUserDao for UserRepository {
     async fn find_user_credential_by_login(&self, login: String) -> Result<Option<UserCredential>, sqlx::Error> {
-        sqlx::query_as::<_, UserCredential>("SELECT id, kind, login, confirmed_at, user_id, login_attempts, locked_until FROM user_credentials WHERE login = $1")
+        sqlx::query_as::<_, UserCredential>(r#"
+            SELECT 
+                id, kind, login, confirmed_at, user_id, login_attempts, locked_until 
+            FROM 
+                user_credentials 
+            WHERE 
+                login = $1
+            "#)
             .bind(login)
             .fetch_optional(&self.pool)
             .await
@@ -100,7 +109,7 @@ impl AuthenticateUserDao for UserRepository {
             .bind(user_credential_id)
             .execute(&mut *transaction)
             .await?;
-        sqlx::query("UPDATE user_sessions SET deleted_at = CURRENT_TIMESTAMP WHERE user_credential_id = $1 AND deleted_at IS NULL")
+        sqlx::query("UPDATE user_sessions SET disabled_at = CURRENT_TIMESTAMP WHERE user_credential_id = $1 AND disabled_at IS NULL")
             .bind(user_credential_id)
             .execute(&mut *transaction)
             .await?;
@@ -121,9 +130,9 @@ impl RefreshSessionDao for UserRepository {
         let some_session_or_none = sqlx::query_as::<_, UserSession>(r#"
                 UPDATE user_sessions 
                 SET 
-                    deleted_at = CURRENT_TIMESTAMP 
+                    disabled_at = CURRENT_TIMESTAMP 
                 WHERE 
-                    refresh_token = $1 AND deleted_at IS NULL
+                    refresh_token = $1 AND disabled_at IS NULL
                 RETURNING user_credential_id
             "#)
             .bind(old_refresh_token)
@@ -134,7 +143,14 @@ impl RefreshSessionDao for UserRepository {
             None => return Ok(None), 
         };
         // TODO: по сессии определить credential ( + user, если понадобится больше полей в jwt)
-        let some_credential_or_none = sqlx::query_as::<_, UserCredential>("SELECT id, kind, login, confirmed_at, user_id, login_attempts, locked_until FROM user_credentials WHERE confirmed_at IS NOT NULL AND (locked_until IS NULL OR locked_until < CURRENT_TIMESTAMP) AND id = $1")
+        let some_credential_or_none = sqlx::query_as::<_, UserCredential>(r#"
+                SELECT 
+                    id, kind, login, confirmed_at, user_id, login_attempts, locked_until 
+                FROM 
+                    user_credentials 
+                WHERE 
+                    confirmed_at IS NOT NULL AND (locked_until IS NULL OR locked_until < CURRENT_TIMESTAMP) AND id = $1
+            "#)
             .bind(session.user_credential_id)
             .fetch_optional(&mut *transaction)
             .await?;
@@ -175,6 +191,16 @@ impl ChangePasswordDao for UserRepository {
 impl DeleteUserDao for UserRepository {
     async fn delete_user_by_id(&self, user_id: uuid::Uuid) -> Result<(), sqlx::Error> {
         sqlx::query("UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1")
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+}
+
+impl RestoreUserDao for UserRepository {
+    async fn restore_user_by_id(&self, user_id: uuid::Uuid) -> Result<(), sqlx::Error> {
+        sqlx::query("UPDATE users SET deleted_at = NULL WHERE id = $1")
             .bind(user_id)
             .execute(&self.pool)
             .await?;

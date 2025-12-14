@@ -1,11 +1,10 @@
-use crate::errors::AppError;
-use crate::providers::HashFuncProvider;
+use crate::{
+    errors::AppError,
+    providers::HashFuncProvider,
+    app::commands::RegisterUserDao,
+};
 
-pub trait RegisterUserDao {
-    async fn register_user(&self, login_type: String, login: String, password_digest: String) -> Result<(), AppError>;
-}
-
-pub struct RegisterUser<H, R>
+pub struct RegisterUserCommand<H, R>
 where
     H: HashFuncProvider,
     R: RegisterUserDao,
@@ -14,7 +13,7 @@ where
     repo: R,
 }
 
-impl<H, R> RegisterUser<H, R> 
+impl<H, R> RegisterUserCommand<H, R> 
 where
     H: HashFuncProvider,
     R: RegisterUserDao,

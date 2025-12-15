@@ -32,40 +32,47 @@ pub struct User {
 
 impl RegisterUserDao for UserRepository {
     async fn register_user(&self, login_type: String, login: String, password_digest: String) -> Result<(), AppError> {
-        let mut transaction = self.pool.begin().await.unwrap();
+        let mut transaction = match self.pool.begin().await {
+            Ok(transaction) => transaction,
+            Err(_) => return Err(AppError::UnknownDatabaseError),
+        };
 
-        let user = sqlx::query_as::<_, User>("INSERT INTO users DEFAULT VALUES RETURNING id;").fetch_one(&mut *transaction).await.unwrap();
+        let user = match sqlx::query_as::<_, User>("INSERT INTO users DEFAULT VALUES RETURNING id;").fetch_one(&mut *transaction).await {
+            Ok(user) => user,
+            Err(_) => return Err(AppError::UnknownDatabaseError),
+        };
 
-        let result = sqlx::query("INSERT INTO user_credentials (login, user_id, kind) VALUES ($1, $2, $3);")
-                    .bind(login)
-                    .bind(user.id)
-                    .bind(login_type)
-                    .execute(&mut *transaction)
-                    .await;
-        match result {
+        match sqlx::query("INSERT INTO user_credentials (login, user_id, kind) VALUES ($1, $2, $3);")
+            .bind(login)
+            .bind(user.id)
+            .bind(login_type)
+            .execute(&mut *transaction)
+            .await {
+            Ok(_) => {},
             Err(sqlx::Error::Database(db_err)) => {
                 if let Some(pg_err) = db_err.try_downcast_ref::<sqlx::postgres::PgDatabaseError>() {
                     match pg_err.code() {
-                        "23505" => Err(AppError::UsernameIsTaken),
-                        _ => Err(AppError::UnknownDatabaseError),
+                        "23505" => return Err(AppError::UsernameIsTaken),
+                        _ => return Err(AppError::UnknownDatabaseError),
                     }
                 } else {
-                    Err(AppError::UnknownDatabaseError)
+                    return Err(AppError::UnknownDatabaseError);
                 }
             },
-            Err(_) => {
-                Err(AppError::UnknownDatabaseError)
-            },
-            Ok(_) => {
-                sqlx::query("INSERT INTO user_passwords (password_digest, user_id) VALUES ($1, $2);")
-                    .bind(password_digest)
-                    .bind(user.id)
-                    .execute(&mut *transaction)
-                    .await
-                    .unwrap();
-                transaction.commit().await.unwrap();
-                Ok(())
-            }
+            Err(_) => return Err(AppError::UnknownDatabaseError),
+        }
+        match sqlx::query("INSERT INTO user_passwords (password_digest, user_id) VALUES ($1, $2);")
+            .bind(password_digest)
+            .bind(user.id)
+            .execute(&mut *transaction)
+            .await {
+            Ok(_) => {},
+            Err(_) => return Err(AppError::UnknownDatabaseError),
+        }
+
+        match transaction.commit().await {
+            Ok(_) => Ok(()),
+            Err(_) => Err(AppError::UnknownDatabaseError),
         }
     }
 }
@@ -99,9 +106,12 @@ impl AuthenticateUserDao for UserRepository {
         }
     }
 
-    async fn create_session(&self, user_credential_id: uuid::Uuid, refresh_token: String) -> Result<(), sqlx::Error> {
-        let mut transaction = self.pool.begin().await?;
-        sqlx::query(r#"
+    async fn create_session(&self, user_credential_id: uuid::Uuid, refresh_token: String) -> Result<(), AppError> {
+        let mut transaction = match self.pool.begin().await {
+            Ok(transaction) => transaction,
+            Err(_) => return Err(AppError::UnknownDatabaseError),
+        };
+        match sqlx::query(r#"
                 UPDATE user_credentials 
                 SET 
                     login_attempts = 0, 
@@ -111,19 +121,30 @@ impl AuthenticateUserDao for UserRepository {
             "#)
             .bind(user_credential_id)
             .execute(&mut *transaction)
-            .await?;
-        sqlx::query("UPDATE user_sessions SET disabled_at = CURRENT_TIMESTAMP WHERE user_credential_id = $1 AND disabled_at IS NULL")
+            .await {
+            Ok(_) => {},
+            Err(_) => return Err(AppError::UnknownDatabaseError),
+        };
+        match sqlx::query("UPDATE user_sessions SET disabled_at = CURRENT_TIMESTAMP WHERE user_credential_id = $1 AND disabled_at IS NULL")
             .bind(user_credential_id)
             .execute(&mut *transaction)
-            .await?;
-        sqlx::query("INSERT INTO user_sessions (refresh_token, user_credential_id) VALUES ($1, $2)")
+            .await {
+            Ok(_) => {},
+            Err(_) => return Err(AppError::UnknownDatabaseError),
+        };
+        match sqlx::query("INSERT INTO user_sessions (refresh_token, user_credential_id) VALUES ($1, $2)")
             .bind(refresh_token)
             .bind(user_credential_id)
             .execute(&mut *transaction)
-            .await?;
-        transaction.commit().await?;
-
-        Ok(())
+            .await {
+            Ok(_) => {},
+            Err(_) => return Err(AppError::UnknownDatabaseError),
+        };
+        
+        match transaction.commit().await {
+            Ok(_) => Ok(()),
+            Err(_) => Err(AppError::UnknownDatabaseError),
+        }
     }
 }
 

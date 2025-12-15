@@ -45,7 +45,7 @@ pub trait RegisterUserDao {
 pub trait AuthenticateUserDao {
     async fn find_user_credential_by_login(&self, login: String) -> Result<Option<UserCredential>, sqlx::Error>;
     async fn update_failure_login(&self, id: uuid::Uuid, actual_failure_login_attempts: u16, locked_until: Option<chrono::NaiveDateTime>) -> Result<(), AppError>;
-    async fn create_session(&self, user_credential_id: uuid::Uuid, refresh_token: String) -> Result<(), sqlx::Error>;
+    async fn create_session(&self, user_credential_id: uuid::Uuid, refresh_token: String) -> Result<(), AppError>;
 }
 
 pub trait RefreshSessionDao {

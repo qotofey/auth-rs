@@ -1,4 +1,4 @@
-use crate::providers::TokenProvider;
+use crate::providers::TokenEncoderProvider;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -11,7 +11,7 @@ pub struct Claims {
 #[derive(Clone)]
 pub struct JwtEncoderProvider;
 
-impl TokenProvider for JwtEncoderProvider {
+impl TokenEncoderProvider for JwtEncoderProvider {
     fn provide(&self, user_id: String) -> Option<String> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -36,7 +36,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn get_password_hash() {
+    fn encode_jwt() {
         // Given
         let jwt_encoder = JwtEncoderProvider;
 
@@ -44,7 +44,7 @@ mod tests {
         let token = jwt_encoder.provide("Qwerty123".to_owned()).unwrap();
 
         // Then
-        assert_ne!(token, "!Qwerty123".to_owned());
+        assert_ne!(token, "Qwerty123".to_owned());
     }
 }
 

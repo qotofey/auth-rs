@@ -4,9 +4,11 @@ use crate::{
     app::{
         UserCredential,
         UserSecret,
+        User,
         queries::{
             FindUserCredentialDao,
             FindUserSecretDao,
+            FindUserDao,
         },
         commands::{
             RegisterUserDao,
@@ -29,11 +31,6 @@ impl UserRepository {
     pub fn new(pool: sqlx::PgPool) -> Self {
         Self { pool }
     }
-}
-
-#[derive(sqlx::FromRow)]
-pub struct User {
-    pub id: sqlx::types::uuid::Uuid,
 }
 
 impl RegisterUserDao for UserRepository {
@@ -214,7 +211,14 @@ impl RefreshSessionDao for UserRepository {
 
 impl FindUserSecretDao for UserRepository {
     async fn find_user_secret_by_user_id(&self, id: uuid::Uuid) -> Result<Option<UserSecret>, AppError> {
-        sqlx::query_as::<_, UserSecret>("SELECT * FROM user_passwords WHERE user_id = $1")
+        sqlx::query_as::<_, UserSecret>(r#"
+            SELECT 
+                id, kind, login, confirmed_at, user_id, login_attempts, locked_until 
+            FROM 
+                user_passwords 
+            WHERE 
+                user_id = $1
+            "#)
             .bind(id)
             .fetch_optional(&self.pool)
             .await
@@ -264,3 +268,20 @@ impl RestoreUserDao for UserRepository {
         }
     }
 }
+
+impl FindUserDao for UserRepository {
+    async fn find_user_by_id(&self, user_id: uuid::Uuid) -> Result<Option<User>, AppError> {
+        sqlx::query_as::<_, User>(r#"
+            SELECT 
+                id, first_name, middle_name, last_name, birthdate, gender, blocked_at, deleted_at
+            FROM 
+                users
+            WHERE id = $1
+            "#)
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|_| AppError::NotFound)
+    }
+}
+

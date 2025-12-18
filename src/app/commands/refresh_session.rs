@@ -2,7 +2,7 @@ use crate::{
     errors::AppError,
     providers::{
         IdProvider, 
-        TokenProvider,
+        TokenEncoderProvider,
     },
     app::commands::{
         Session,
@@ -14,7 +14,7 @@ use crate::{
 pub struct RefreshSessionCommand<I, T, R>
 where
     I: IdProvider,
-    T: TokenProvider,
+    T: TokenEncoderProvider,
     R: RefreshSessionDao,
 {
     id_provider: I,
@@ -30,7 +30,7 @@ pub struct UserSession {
 impl<I, T, R> RefreshSessionCommand<I, T, R> 
 where
     I: IdProvider,
-    T: TokenProvider,
+    T: TokenEncoderProvider,
     R: RefreshSessionDao
 {
     pub fn new(id_provider: I, token_provider: T, repo: R) -> Self {

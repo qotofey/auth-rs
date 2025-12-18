@@ -19,7 +19,7 @@ use crate::{
             restore_user::RestoreUserCommand,
         },
     },
-    providers::{HashFuncProvider, HashVerifierProvider, IdProvider, TokenProvider},
+    providers::{HashFuncProvider, HashVerifierProvider, IdProvider, TokenEncoderProvider},
 };
 
 pub struct Container<H, V, I, T, R, A, S, D, C>
@@ -27,7 +27,7 @@ where
     H: HashFuncProvider + Clone,
     V: HashVerifierProvider + Clone,
     I: IdProvider + Clone,
-    T: TokenProvider + Clone,
+    T: TokenEncoderProvider + Clone,
     R: RegisterUserDao,
     A: FindUserCredentialDao + FindUserSecretDao+ AuthenticateUserDao + ChangePasswordDao + Clone,
     S: RefreshSessionDao,
@@ -47,7 +47,7 @@ where
     H: HashFuncProvider + Clone,
     V: HashVerifierProvider + Clone,
     I: IdProvider + Clone,
-    T: TokenProvider + Clone,
+    T: TokenEncoderProvider + Clone,
     R: RegisterUserDao,
     A: FindUserCredentialDao + FindUserSecretDao + AuthenticateUserDao + ChangePasswordDao + Clone,
     S: RefreshSessionDao,

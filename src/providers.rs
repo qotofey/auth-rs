@@ -16,9 +16,14 @@ pub trait HashVerifierProvider {
     fn provide(&self, password: String, password_digest: String) -> PasswordConfirmation;
 }
 
-pub trait TokenProvider {
+pub trait TokenEncoderProvider {
     fn provide(&self, user_id: String) -> Option<String>;
 }
+
+pub trait TokenDecoderProvider {
+    fn provider(&self, token: String) -> Option<String>;
+}
+
 pub trait IdProvider {
     fn provide(&self) -> Option<String>;
 }

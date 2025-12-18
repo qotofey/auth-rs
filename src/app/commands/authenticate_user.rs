@@ -4,11 +4,9 @@ use crate::{
         HashFuncProvider,
         HashVerifierProvider, 
         IdProvider, 
-        TokenProvider,
+        TokenEncoderProvider,
     },
     app::{
-        UserCredential,
-        UserSecret,
         queries::{
             FindUserCredentialDao,
             FindUserSecretDao,
@@ -29,7 +27,7 @@ where
     H: HashFuncProvider,
     V: HashVerifierProvider,
     I: IdProvider,
-    T: TokenProvider,
+    T: TokenEncoderProvider,
     A: FindUserCredentialDao + FindUserSecretDao + AuthenticateUserDao + ChangePasswordDao,
 {
     hash_func_provider: H,
@@ -44,7 +42,7 @@ where
     H: HashFuncProvider,
     V: HashVerifierProvider,
     I: IdProvider,
-    T: TokenProvider,
+    T: TokenEncoderProvider,
     A: FindUserCredentialDao + FindUserSecretDao + AuthenticateUserDao + ChangePasswordDao,
 {
     pub fn new(hash_func_provider: H, hash_verifier_provider: V, refresh_token_generator: I, access_token_provider: T, repo: A) -> Self {

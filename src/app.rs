@@ -21,3 +21,15 @@ pub struct UserSecret {
     pub password_digest: String,
 }
 
+#[derive(sqlx::FromRow)]
+pub struct User {
+    pub id: uuid::Uuid,
+    pub first_name: Option<String>,
+    pub middle_name: Option<String>,
+    pub last_name: Option<String>,
+    pub birthdate: Option<chrono::NaiveDate>,
+    pub gender: Option<String>,
+    pub blocked_at: Option<chrono::NaiveDateTime>,
+    pub deleted_at: Option<chrono::NaiveDateTime>,
+}
+

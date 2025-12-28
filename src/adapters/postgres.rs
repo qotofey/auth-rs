@@ -200,13 +200,13 @@ impl RefreshSessionDao for UserRepository {
             None => return Ok(None),
         };
 
-        sqlx::query("INSERT INTO user_sessions (refresh_token, user_credential_id) VALUES ($1, $2)")
+        let _ = sqlx::query("INSERT INTO user_sessions (refresh_token, user_credential_id) VALUES ($1, $2)")
             .bind(new_refresh_token)
             .bind(session.user_credential_id)
             .execute(&mut *transaction)
             .await
             .map_err(|_| AppError::UnknownDatabaseError);
-        transaction.commit().await.map_err(|_| AppError::UnknownDatabaseError);
+        let _ = transaction.commit().await.map_err(|_| AppError::UnknownDatabaseError);
 
         Ok(Some(credential))
     }
@@ -236,7 +236,7 @@ impl ChangePasswordDao for UserRepository {
             .bind(user_secret_id)
             .execute(&self.pool)
             .await;
-        
+
         match result_of_update {
             Ok(_) => Ok(()),
             Err(_) => Err(AppError::UnknownDatabaseError),

@@ -2,8 +2,8 @@ use crate::{
     errors::AppError,
     providers::{
         HashFuncProvider,
-        HashVerifierProvider, 
-        IdProvider, 
+        HashVerifierProvider,
+        IdProvider,
         TokenEncoderProvider,
     },
     app::{
@@ -56,15 +56,16 @@ where
     }
 
     pub async fn call(&self, login: String, password: String) -> Result<Session, AppError> {
-        let credentail = match self.repo.find_user_credential_by_login(login.trim().to_lowercase()).await {
-            Ok(some_or_none) => match some_or_none {
-                Some(credentail) => credentail,
-                None => return Err(AppError::LoginError),
-            },
-            Err(_) => {
-                return Err(AppError::UnknownDatabaseError);
-            },
-        };
+        // let credentail = match self.repo.find_user_credential_by_login(login.trim().to_lowercase()).await {
+        //     Ok(some_or_none) => match some_or_none {
+        //         Some(credentail) => credentail,
+        //         None => return Err(AppError::LoginError),
+        //     },
+        //     Err(_) => {
+        //         return Err(AppError::UnknownDatabaseError);
+        //     },
+        // };
+
 
         let is_locked = match credentail.locked_until {
             Some(locked_until) => locked_until > chrono::Utc::now().naive_local(),
@@ -73,13 +74,16 @@ where
 
         if is_locked { return Err(AppError::TempLocked) };
 
-        let secret = match self.repo.find_user_secret_by_user_id(credentail.user_id).await {
-            Ok(some_or_none) => match some_or_none {
-                Some(secret) => secret,
-                None => return Err(AppError::LoginError),
-            },
-            Err(_) => return Err(AppError::UnknownDatabaseError),
-        };
+        println!("11111111111");
+        // let secret = match self.repo.find_user_secret_by_user_id(credentail.user_id).await {
+        //     Ok(some_or_none) => match some_or_none {
+        //         Some(secret) => secret,
+        //         None => return Err(AppError::LoginError),
+        //     },
+        //     Err(_) => return Err(AppError::UnknownDatabaseError),
+        // };
+        let secret = self.repo.find_user_secret_by_user_id(credentail.user_id).await?;
+        println!("22222222222");
 
         let password_confirmation = self.hash_verifier_provider.provide(password.clone(), secret.password_digest);
         let is_password_correct = password_confirmation.is_confirmed;
@@ -129,5 +133,71 @@ where
             Ok(_) => Ok(Session { user_id, refresh_token, access_token }),
             Err(_) => Err(AppError::UnknownDatabaseError),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use testcontainers_modules::{
+        postgres,
+        testcontainers::{
+            ImageExt,
+            runners::AsyncRunner,
+        },
+    };
+    use crate::{
+        di,
+        providers,
+        adapters,
+    };
+
+    #[tokio::test]
+    async fn first_authenticate_user_command() {
+        // Given
+        let postgres_container = postgres::Postgres::default()
+            .with_tag("18.1-alpine")
+            .start()
+            .await
+            .unwrap();
+
+        let url = &format!(
+            "postgres://postgres:postgres@{}:{}/postgres",
+            postgres_container.get_host().await.unwrap(),
+            postgres_container.get_host_port_ipv4(5432).await.unwrap()
+        );
+
+        let db_pool = sqlx::postgres::PgPoolOptions::new().max_connections(1).connect(url).await.unwrap();
+        sqlx::migrate!("./migrations").run(&db_pool).await.unwrap();
+
+        let argon2_hasher = providers::argon2_hasher::Argon2HasherProvider::new(8, 1, 1);
+        let argon2_verifier = providers::argon2_verifier::Argon2VerifierProvider::new(8, 1, 1);
+
+        let refresh_token_generator = providers::refresh_token_generator::RefreshTokenGeneratorProvider;
+        let jwt_encoder = providers::jwt_encoder::JwtEncoderProvider;
+
+        let user_repo = adapters::postgres::UserRepository::new(db_pool.clone());
+        let container = di::Container::new(
+            argon2_hasher,
+            argon2_verifier,
+            refresh_token_generator,
+            jwt_encoder,
+            user_repo.clone(),
+            user_repo.clone(),
+            user_repo.clone(),
+            user_repo.clone(),
+            user_repo,
+        );
+        container.register_user_command.call("username0".to_string(), "Qwerty123!".to_string()).await.unwrap();
+
+        // When
+        let initial_user_sessions_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM user_sessions").fetch_one(&db_pool).await.unwrap();
+
+        container.authenticate_user_command.call("username0".to_string(), "Qwerty123!".to_string()).await.unwrap();
+
+        let final_user_sessions_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM user_sessions").fetch_one(&db_pool).await.unwrap();
+
+        // Then
+        assert_eq!(final_user_sessions_count - initial_user_sessions_count, 1);
     }
 }

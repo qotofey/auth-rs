@@ -53,16 +53,18 @@ mod tests {
     };
 
     #[tokio::test]
-    async fn first_register_user_command() {
+    async fn first_call_register_user_command() {
         // Given
         let postgres_container = postgres::Postgres::default()
             .with_tag("18.1-alpine")
             .start()
             .await
             .unwrap();
-
-        let url = &format!("postgres://postgres:postgres@{}:{}/postgres", postgres_container.get_host().await.unwrap(), postgres_container.get_host_port_ipv4(5432).await.unwrap());
-
+        let url = &format!(
+            "postgres://postgres:postgres@{}:{}/postgres", 
+            postgres_container.get_host().await.unwrap(), 
+            postgres_container.get_host_port_ipv4(5432).await.unwrap()
+        );
         let db_pool = sqlx::postgres::PgPoolOptions::new().max_connections(1).connect(url).await.unwrap();
         sqlx::migrate!("./migrations").run(&db_pool).await.unwrap();
 
@@ -103,7 +105,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn second_register_user_command() {
+    async fn repeat_username_when_calling_register_user_command() {
         // Given
         let postgres_container = postgres::Postgres::default()
             .with_tag("18.1-alpine")
@@ -152,5 +154,48 @@ mod tests {
         assert_eq!(final_user_credentials_count - initial_user_credentials_count, 0);
         assert_eq!(final_user_passwords_count - initial_user_passwords_count, 0);
         assert!(matches!(res, Err(AppError::UsernameIsTaken)));
+    }
+
+    #[tokio::test]
+    async fn introduce_marginal_spaces_when_calling_register_user_command() {
+        // Given
+        let postgres_container = postgres::Postgres::default()
+            .with_tag("18.1-alpine")
+            .start()
+            .await
+            .unwrap();
+
+        let url = &format!("postgres://postgres:postgres@{}:{}/postgres", postgres_container.get_host().await.unwrap(), postgres_container.get_host_port_ipv4(5432).await.unwrap());
+
+        let db_pool = sqlx::postgres::PgPoolOptions::new().max_connections(1).connect(url).await.unwrap();
+        sqlx::migrate!("./migrations").run(&db_pool).await.unwrap();
+
+        let argon2_hasher = providers::argon2_hasher::Argon2HasherProvider::new(8, 1, 1);
+        let argon2_verifier = providers::argon2_verifier::Argon2VerifierProvider::new(8, 1, 1);
+
+        let refresh_token_generator = providers::refresh_token_generator::RefreshTokenGeneratorProvider;
+        let jwt_encoder = providers::jwt_encoder::JwtEncoderProvider;
+
+        let user_repo = adapters::postgres::UserRepository::new(db_pool.clone());
+        let container = di::Container::new(
+            argon2_hasher,
+            argon2_verifier,
+            refresh_token_generator,
+            jwt_encoder,
+            user_repo.clone(),
+            user_repo.clone(),
+            user_repo.clone(),
+            user_repo.clone(),
+            user_repo,
+        );
+
+        // When
+        let res = container.register_user_command.call(" \tuser0 \r\n  ".to_string(), "123123".to_string()).await;
+
+        // Then
+        let (kind, login) = sqlx::query_as::<_, (String, String)>("SELECT kind, login FROM user_credentials").fetch_one(&db_pool).await.unwrap();
+
+        assert_eq!(kind, "username".to_string());
+        assert_eq!(login, "user0".to_string());
     }
 }

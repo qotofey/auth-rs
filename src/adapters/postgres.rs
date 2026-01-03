@@ -40,7 +40,9 @@ impl RegisterUserDao for UserRepository {
             Err(_) => return Err(AppError::UnknownDatabaseError),
         };
 
-        let user = sqlx::query_as::<_, User>("INSERT INTO users DEFAULT VALUES RETURNING id, first_name, middle_name, last_name, birthdate, gender, blocked_at, deleted_at")
+        let user = sqlx::query_as::<_, User>(r#"
+                INSERT INTO users DEFAULT VALUES RETURNING id, first_name, middle_name, last_name, birthdate, gender, blocked_at, deleted_at
+            "#)
             .fetch_one(&mut *transaction)
             .await.unwrap();
         // {
@@ -216,16 +218,16 @@ impl FindUserSecretDao for UserRepository {
     async fn find_user_secret_by_user_id(&self, id: uuid::Uuid) -> Result<Option<UserSecret>, AppError> {
         sqlx::query_as::<_, UserSecret>(r#"
             SELECT 
-                id, kind, login, confirmed_at, user_id, login_attempts, locked_until 
+                id, password_digest, user_id, disabled_at
             FROM 
-                user_passwords 
+                user_passwords
             WHERE 
                 user_id = $1
             "#)
             .bind(id)
             .fetch_optional(&self.pool)
             .await
-            .map_err(|_| AppError::NotFound)
+            .map_err(|_| AppError::UnknownDatabaseError)
     }
 }
 

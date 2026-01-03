@@ -22,7 +22,7 @@ where
         Self { hash_verifier_provider, repo }
     }
 
-    pub async fn call(&self, user_id: uuid::Uuid, password: String) -> Result<(), AppError> {
+    pub async fn call(&self, user_id: uuid::Uuid, _password: String) -> Result<(), AppError> {
         // запросить user secrets по user_id, чтобы disabled_at IS NULL
         // верифицировать password_digest
 

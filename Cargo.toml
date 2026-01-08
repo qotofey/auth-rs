@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 argon2 = { version = "0.5.3", features = ["std"] }
+axum = "0.8.8"
 base64 = "0.22.1"
 chrono = "0.4.42"
 config = "0.15.19"

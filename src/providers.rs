@@ -9,7 +9,7 @@ pub trait HashFuncProvider {
 
 pub struct PasswordConfirmation {
     pub is_confirmed: bool,
-    pub need_upgrade: bool, 
+    pub need_upgrade: bool,
 }
 
 pub trait HashVerifierProvider {
@@ -27,4 +27,3 @@ pub trait TokenDecoderProvider {
 pub trait IdProvider {
     fn provide(&self) -> Option<String>;
 }
-

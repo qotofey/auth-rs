@@ -97,23 +97,25 @@ where
                     % LOGIN_ATTEMPTS_AFTER_FIRST_LOCKING
                     == 0;
 
-            // TODO: eсли тут вернётся None блокировка не будет инкрементирована
             let locked_until = if is_subject_locking {
-                // TODO: обдумать алгоритм распределения времени блокировки
                 chrono::Utc::now()
                     .naive_local()
                     .checked_add_signed(chrono::Duration::minutes(LOCKING_IN_MINUTES))
             } else {
                 None
             };
+
+            let just_locked = locked_until.is_some();
+
             self.repo
                 .update_failure_login(credentail.id, actual_failure_login_attempts, locked_until)
                 .await?;
-            if is_locked {
-                return Err(AppError::TempLocked);
-            }
 
-            return Err(AppError::LoginError);
+            return Err(if just_locked {
+                AppError::TempLocked
+            } else {
+                AppError::LoginError
+            });
         }
 
         if password_confirmation.need_upgrade {
@@ -168,6 +170,9 @@ mod tests {
         testcontainers::{ImageExt, runners::AsyncRunner},
     };
 
+    const TEST_JWT_SECRET: &[u8] = b"test-secret-for-unit-tests";
+    const TEST_JWT_TTL_MINUTES: u64 = 15;
+
     #[tokio::test]
     async fn first_authenticate_user_command() {
         // Given
@@ -195,7 +200,8 @@ mod tests {
 
         let refresh_token_generator =
             providers::refresh_token_generator::RefreshTokenGeneratorProvider;
-        let jwt_encoder = providers::jwt_encoder::JwtEncoderProvider;
+        let jwt_encoder =
+            providers::jwt_encoder::JwtEncoderProvider::new(TEST_JWT_SECRET, TEST_JWT_TTL_MINUTES);
 
         let user_repo = adapters::postgres::UserRepository::new(db_pool.clone());
         let container = di::Container::new(
@@ -265,7 +271,8 @@ mod tests {
 
         let refresh_token_generator =
             providers::refresh_token_generator::RefreshTokenGeneratorProvider;
-        let jwt_encoder = providers::jwt_encoder::JwtEncoderProvider;
+        let jwt_encoder =
+            providers::jwt_encoder::JwtEncoderProvider::new(TEST_JWT_SECRET, TEST_JWT_TTL_MINUTES);
 
         let user_repo = adapters::postgres::UserRepository::new(db_pool.clone());
         let container = di::Container::new(
@@ -340,7 +347,8 @@ mod tests {
 
         let refresh_token_generator =
             providers::refresh_token_generator::RefreshTokenGeneratorProvider;
-        let jwt_encoder = providers::jwt_encoder::JwtEncoderProvider;
+        let jwt_encoder =
+            providers::jwt_encoder::JwtEncoderProvider::new(TEST_JWT_SECRET, TEST_JWT_TTL_MINUTES);
 
         let user_repo = adapters::postgres::UserRepository::new(db_pool.clone());
         let container = di::Container::new(
@@ -386,5 +394,63 @@ mod tests {
 
         // Then
         assert_eq!(final_user_sessions_count - initial_user_sessions_count, 1);
+    }
+
+    #[tokio::test]
+    async fn lock_user_after_five_failed_attempts() {
+        // Given
+        let postgres_container = postgres::Postgres::default()
+            .with_tag("18.1-alpine")
+            .start()
+            .await
+            .unwrap();
+        let url = &format!(
+            "postgres://postgres:postgres@{}:{}/postgres",
+            postgres_container.get_host().await.unwrap(),
+            postgres_container.get_host_port_ipv4(5432).await.unwrap()
+        );
+        let db_pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(1)
+            .connect(url)
+            .await
+            .unwrap();
+        sqlx::migrate!("./migrations").run(&db_pool).await.unwrap();
+
+        let user_repo = adapters::postgres::UserRepository::new(db_pool.clone());
+        let container = di::Container::new(
+            providers::argon2_hasher::Argon2HasherProvider::new(8, 1, 1),
+            providers::argon2_verifier::Argon2VerifierProvider::new(8, 1, 1),
+            providers::refresh_token_generator::RefreshTokenGeneratorProvider,
+            providers::jwt_encoder::JwtEncoderProvider::new(TEST_JWT_SECRET, TEST_JWT_TTL_MINUTES),
+            user_repo.clone(),
+            user_repo.clone(),
+            user_repo.clone(),
+            user_repo.clone(),
+            user_repo,
+        );
+        container
+            .register_user_command
+            .call("username0".to_string(), "Qwerty123!".to_string())
+            .await
+            .unwrap();
+
+        // When: 5 неудачных попыток
+        let mut last_result: Result<Session, AppError> = Err(AppError::UnknownError);
+        for _ in 0..5 {
+            last_result = container
+                .authenticate_user_command
+                .call("username0".to_string(), "WrongPassword!".to_string())
+                .await;
+        }
+
+        // Then: 5-я попытка - TempLocked
+        assert!(matches!(last_result, Err(AppError::TempLocked)));
+
+        // И следующая попытка с правильным паролем тоже TempLocked
+        let locked = container
+            .authenticate_user_command
+            .call("username0".to_string(), "Qwerty123!".to_string())
+            .await;
+        assert!(matches!(locked, Err(AppError::TempLocked)));
     }
 }

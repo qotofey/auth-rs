@@ -1,8 +1,8 @@
+use crate::providers::{HashVerifierProvider, PasswordConfirmation};
 use argon2::{
     Argon2,
     password_hash::{PasswordHash, PasswordVerifier},
 };
-use crate::providers::{HashVerifierProvider, PasswordConfirmation};
 
 #[derive(Clone)]
 pub struct Argon2VerifierProvider {
@@ -13,35 +13,47 @@ pub struct Argon2VerifierProvider {
 
 impl Argon2VerifierProvider {
     pub fn new(memory_cost: u32, time_cost: u32, parallelism: u32) -> Self {
-        Self { memory_cost, time_cost, parallelism }
+        Self {
+            memory_cost,
+            time_cost,
+            parallelism,
+        }
     }
 }
 
 impl HashVerifierProvider for Argon2VerifierProvider {
     fn provide(&self, password: String, password_digest: String) -> PasswordConfirmation {
-        // TODO: избавиться от unwrap
-        let parsed_hash = PasswordHash::new(&password_digest).unwrap();
+        let parsed_hash = match PasswordHash::new(&password_digest) {
+            Ok(hash) => hash,
+            Err(_) => {
+                return PasswordConfirmation {
+                    is_confirmed: false,
+                    need_upgrade: false,
+                };
+            }
+        };
 
         let is_confirmed = Argon2::default()
             .verify_password(password.as_bytes(), &parsed_hash)
             .is_ok();
 
-        let m_cost_match = match parsed_hash.params.get_decimal("m") { 
-            Some(m_cost) => m_cost == self.memory_cost,
-            None => false,
+        let need_upgrade = if !is_confirmed {
+            false
+        } else {
+            match argon2::Params::try_from(&parsed_hash) {
+                Ok(params) => {
+                    params.m_cost() != self.memory_cost
+                        || params.t_cost() != self.time_cost
+                        || params.p_cost() != self.parallelism
+                }
+                Err(_) => false,
+            }
         };
-        let t_cost_match = match parsed_hash.params.get_decimal("t") { 
-            Some(t_cost) => t_cost == self.time_cost,
-            None => false,
-        };
-        let p_cost_match = match parsed_hash.params.get_decimal("p") { 
-            Some(p_cost) => p_cost == self.parallelism,
-            None => false,
-        };
-        let is_hash_params_actual = m_cost_match && t_cost_match && p_cost_match;
-        let need_upgrade = !is_hash_params_actual;
 
-        PasswordConfirmation { is_confirmed, need_upgrade }
+        PasswordConfirmation {
+            is_confirmed,
+            need_upgrade,
+        }
     }
 }
 
@@ -57,7 +69,7 @@ mod tests {
         let argon2_hasher = Argon2HasherProvider::new(8, 1, 1);
         let password_digest = argon2_hasher.provide("!Qwerty123".to_string()).unwrap();
         let argon2_verifier = Argon2VerifierProvider::new(8, 1, 1);
- 
+
         // When
         let confirmation = argon2_verifier.provide("!Qwerty123".to_string(), password_digest);
 
@@ -72,7 +84,7 @@ mod tests {
         let argon2_hasher = Argon2HasherProvider::new(8, 1, 1);
         let password_digest = argon2_hasher.provide("!Qwerty123".to_string()).unwrap();
         let argon2_verifier = Argon2VerifierProvider::new(8, 2, 1);
- 
+
         // When
         let confirmation = argon2_verifier.provide("!Qwerty123".to_string(), password_digest);
 
@@ -105,7 +117,7 @@ mod tests {
         let argon2_hasher = Argon2HasherProvider::new(8, 1, 1);
         let password_digest = argon2_hasher.provide("!Qwerty123".to_string()).unwrap();
         let argon2_verifier = Argon2VerifierProvider::new(8, 1, 1);
- 
+
         // When
         let confirmation = argon2_verifier.provide("InvalidPassword".to_string(), password_digest);
 

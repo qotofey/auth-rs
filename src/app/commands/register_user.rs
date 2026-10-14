@@ -1,8 +1,4 @@
-use crate::{
-    errors::AppError,
-    providers::HashFuncProvider,
-    app::commands::RegisterUserDao,
-};
+use crate::{app::commands::RegisterUserDao, errors::AppError, providers::HashFuncProvider};
 
 pub struct RegisterUserCommand<H, R>
 where
@@ -13,13 +9,16 @@ where
     repo: R,
 }
 
-impl<H, R> RegisterUserCommand<H, R> 
+impl<H, R> RegisterUserCommand<H, R>
 where
     H: HashFuncProvider,
     R: RegisterUserDao,
 {
     pub fn new(hash_func_provider: H, repo: R) -> Self {
-        Self { hash_func_provider, repo }
+        Self {
+            hash_func_provider,
+            repo,
+        }
     }
 
     pub async fn call(&self, username: String, password: String) -> Result<(), AppError> {
@@ -27,10 +26,12 @@ where
             Some(hash) => hash,
             None => {
                 return Err(AppError::UnknownError);
-            }, 
+            }
         };
         let login_type = "username".to_string();
-        self.repo.register_user(login_type, username.trim().to_lowercase(), password_digest).await?;
+        self.repo
+            .register_user(login_type, username.trim().to_lowercase(), password_digest)
+            .await?;
 
         Ok(())
     }
@@ -39,17 +40,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{adapters, di, providers};
     use testcontainers_modules::{
         postgres,
-        testcontainers::{
-            ImageExt,
-            runners::AsyncRunner,
-        },
-    };
-    use crate::{
-        di,
-        providers,
-        adapters,
+        testcontainers::{ImageExt, runners::AsyncRunner},
     };
 
     #[tokio::test]
@@ -61,18 +55,24 @@ mod tests {
             .await
             .unwrap();
         let url = &format!(
-            "postgres://postgres:postgres@{}:{}/postgres", 
-            postgres_container.get_host().await.unwrap(), 
+            "postgres://postgres:postgres@{}:{}/postgres",
+            postgres_container.get_host().await.unwrap(),
             postgres_container.get_host_port_ipv4(5432).await.unwrap()
         );
-        let db_pool = sqlx::postgres::PgPoolOptions::new().max_connections(1).connect(url).await.unwrap();
+        let db_pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(1)
+            .connect(url)
+            .await
+            .unwrap();
         sqlx::migrate!("./migrations").run(&db_pool).await.unwrap();
 
         let argon2_hasher = providers::argon2_hasher::Argon2HasherProvider::new(8, 1, 1);
         let argon2_verifier = providers::argon2_verifier::Argon2VerifierProvider::new(8, 1, 1);
 
-        let refresh_token_generator = providers::refresh_token_generator::RefreshTokenGeneratorProvider;
-        let jwt_encoder = providers::jwt_encoder::JwtEncoderProvider;
+        let refresh_token_generator =
+            providers::refresh_token_generator::RefreshTokenGeneratorProvider;
+        let jwt_encoder =
+            providers::jwt_encoder::JwtEncoderProvider::new(b"test-secret-for-unit-tests", 15);
 
         let user_repo = adapters::postgres::UserRepository::new(db_pool.clone());
         let container = di::Container::new(
@@ -88,19 +88,48 @@ mod tests {
         );
 
         // When
-        let initial_users_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM users").fetch_one(&db_pool).await.unwrap();
-        let initial_user_credentials_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM user_credentials").fetch_one(&db_pool).await.unwrap();
-        let initial_user_passwords_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM user_passwords").fetch_one(&db_pool).await.unwrap();
+        let initial_users_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM users")
+            .fetch_one(&db_pool)
+            .await
+            .unwrap();
+        let initial_user_credentials_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(1) FROM user_credentials")
+                .fetch_one(&db_pool)
+                .await
+                .unwrap();
+        let initial_user_passwords_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(1) FROM user_passwords")
+                .fetch_one(&db_pool)
+                .await
+                .unwrap();
 
-        container.register_user_command.call("user0".to_string(), "Qwerty123!".to_string()).await.unwrap();
+        container
+            .register_user_command
+            .call("user0".to_string(), "Qwerty123!".to_string())
+            .await
+            .unwrap();
 
-        let final_users_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM users").fetch_one(&db_pool).await.unwrap();
-        let final_user_credentials_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM user_credentials").fetch_one(&db_pool).await.unwrap();
-        let final_user_passwords_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM user_passwords").fetch_one(&db_pool).await.unwrap();
+        let final_users_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM users")
+            .fetch_one(&db_pool)
+            .await
+            .unwrap();
+        let final_user_credentials_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(1) FROM user_credentials")
+                .fetch_one(&db_pool)
+                .await
+                .unwrap();
+        let final_user_passwords_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(1) FROM user_passwords")
+                .fetch_one(&db_pool)
+                .await
+                .unwrap();
 
         // Then
         assert_eq!(final_users_count - initial_users_count, 1);
-        assert_eq!(final_user_credentials_count - initial_user_credentials_count, 1);
+        assert_eq!(
+            final_user_credentials_count - initial_user_credentials_count,
+            1
+        );
         assert_eq!(final_user_passwords_count - initial_user_passwords_count, 1);
     }
 
@@ -113,16 +142,26 @@ mod tests {
             .await
             .unwrap();
 
-        let url = &format!("postgres://postgres:postgres@{}:{}/postgres", postgres_container.get_host().await.unwrap(), postgres_container.get_host_port_ipv4(5432).await.unwrap());
+        let url = &format!(
+            "postgres://postgres:postgres@{}:{}/postgres",
+            postgres_container.get_host().await.unwrap(),
+            postgres_container.get_host_port_ipv4(5432).await.unwrap()
+        );
 
-        let db_pool = sqlx::postgres::PgPoolOptions::new().max_connections(1).connect(url).await.unwrap();
+        let db_pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(1)
+            .connect(url)
+            .await
+            .unwrap();
         sqlx::migrate!("./migrations").run(&db_pool).await.unwrap();
 
         let argon2_hasher = providers::argon2_hasher::Argon2HasherProvider::new(8, 1, 1);
         let argon2_verifier = providers::argon2_verifier::Argon2VerifierProvider::new(8, 1, 1);
 
-        let refresh_token_generator = providers::refresh_token_generator::RefreshTokenGeneratorProvider;
-        let jwt_encoder = providers::jwt_encoder::JwtEncoderProvider;
+        let refresh_token_generator =
+            providers::refresh_token_generator::RefreshTokenGeneratorProvider;
+        let jwt_encoder =
+            providers::jwt_encoder::JwtEncoderProvider::new(b"test-secret-for-unit-tests", 15);
 
         let user_repo = adapters::postgres::UserRepository::new(db_pool.clone());
         let container = di::Container::new(
@@ -136,22 +175,54 @@ mod tests {
             user_repo.clone(),
             user_repo,
         );
-        container.register_user_command.call("user0".to_string(), "Qwerty123!".to_string()).await.unwrap();
+        container
+            .register_user_command
+            .call("user0".to_string(), "Qwerty123!".to_string())
+            .await
+            .unwrap();
 
         // When
-        let initial_users_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM users").fetch_one(&db_pool).await.unwrap();
-        let initial_user_credentials_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM user_credentials").fetch_one(&db_pool).await.unwrap();
-        let initial_user_passwords_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM user_passwords").fetch_one(&db_pool).await.unwrap();
+        let initial_users_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM users")
+            .fetch_one(&db_pool)
+            .await
+            .unwrap();
+        let initial_user_credentials_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(1) FROM user_credentials")
+                .fetch_one(&db_pool)
+                .await
+                .unwrap();
+        let initial_user_passwords_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(1) FROM user_passwords")
+                .fetch_one(&db_pool)
+                .await
+                .unwrap();
 
-        let res = container.register_user_command.call("user0".to_string(), "123123".to_string()).await;
+        let res = container
+            .register_user_command
+            .call("user0".to_string(), "123123".to_string())
+            .await;
 
-        let final_users_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM users").fetch_one(&db_pool).await.unwrap();
-        let final_user_credentials_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM user_credentials").fetch_one(&db_pool).await.unwrap();
-        let final_user_passwords_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM user_passwords").fetch_one(&db_pool).await.unwrap();
+        let final_users_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM users")
+            .fetch_one(&db_pool)
+            .await
+            .unwrap();
+        let final_user_credentials_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(1) FROM user_credentials")
+                .fetch_one(&db_pool)
+                .await
+                .unwrap();
+        let final_user_passwords_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(1) FROM user_passwords")
+                .fetch_one(&db_pool)
+                .await
+                .unwrap();
 
         // Then
         assert_eq!(final_users_count - initial_users_count, 0);
-        assert_eq!(final_user_credentials_count - initial_user_credentials_count, 0);
+        assert_eq!(
+            final_user_credentials_count - initial_user_credentials_count,
+            0
+        );
         assert_eq!(final_user_passwords_count - initial_user_passwords_count, 0);
         assert!(matches!(res, Err(AppError::UsernameIsTaken)));
     }
@@ -165,16 +236,26 @@ mod tests {
             .await
             .unwrap();
 
-        let url = &format!("postgres://postgres:postgres@{}:{}/postgres", postgres_container.get_host().await.unwrap(), postgres_container.get_host_port_ipv4(5432).await.unwrap());
+        let url = &format!(
+            "postgres://postgres:postgres@{}:{}/postgres",
+            postgres_container.get_host().await.unwrap(),
+            postgres_container.get_host_port_ipv4(5432).await.unwrap()
+        );
 
-        let db_pool = sqlx::postgres::PgPoolOptions::new().max_connections(1).connect(url).await.unwrap();
+        let db_pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(1)
+            .connect(url)
+            .await
+            .unwrap();
         sqlx::migrate!("./migrations").run(&db_pool).await.unwrap();
 
         let argon2_hasher = providers::argon2_hasher::Argon2HasherProvider::new(8, 1, 1);
         let argon2_verifier = providers::argon2_verifier::Argon2VerifierProvider::new(8, 1, 1);
 
-        let refresh_token_generator = providers::refresh_token_generator::RefreshTokenGeneratorProvider;
-        let jwt_encoder = providers::jwt_encoder::JwtEncoderProvider;
+        let refresh_token_generator =
+            providers::refresh_token_generator::RefreshTokenGeneratorProvider;
+        let jwt_encoder =
+            providers::jwt_encoder::JwtEncoderProvider::new(b"test-secret-for-unit-tests", 15);
 
         let user_repo = adapters::postgres::UserRepository::new(db_pool.clone());
         let container = di::Container::new(
@@ -190,11 +271,19 @@ mod tests {
         );
 
         // When
-        let res = container.register_user_command.call(" \tuser0 \r\n  ".to_string(), "123123".to_string()).await;
+        let res = container
+            .register_user_command
+            .call(" \tuser0 \r\n  ".to_string(), "123123".to_string())
+            .await;
 
         // Then
-        let (kind, login) = sqlx::query_as::<_, (String, String)>("SELECT kind, login FROM user_credentials").fetch_one(&db_pool).await.unwrap();
+        let (kind, login) =
+            sqlx::query_as::<_, (String, String)>("SELECT kind, login FROM user_credentials")
+                .fetch_one(&db_pool)
+                .await
+                .unwrap();
 
+        assert!(res.is_ok());
         assert_eq!(kind, "username".to_string());
         assert_eq!(login, "user0".to_string());
     }

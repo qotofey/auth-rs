@@ -3,31 +3,42 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Claims {
-    sub: String,
-    exp: u64,
-    iat: u64,
+    pub sub: String,
+    pub exp: u64,
+    pub iat: u64,
 }
 
 #[derive(Clone)]
-pub struct JwtEncoderProvider;
+pub struct JwtEncoderProvider {
+    encoding_key: jsonwebtoken::EncodingKey,
+    ttl_secs: u64,
+}
+
+impl JwtEncoderProvider {
+    pub fn new(secret: &[u8], ttl_minutes: u64) -> Self {
+        Self {
+            encoding_key: jsonwebtoken::EncodingKey::from_secret(secret),
+            ttl_secs: ttl_minutes * 60,
+        }
+    }
+}
 
 impl TokenEncoderProvider for JwtEncoderProvider {
     fn provide(&self, user_id: String) -> Option<String> {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap().as_secs() as u64;
-        let expires_in = now + 15 * 60;
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_secs();
+
         let claims = Claims {
-            sub: user_id.clone(),
-            exp: expires_in,
+            sub: user_id,
+            exp: now + self.ttl_secs,
             iat: now,
         };
-        let access_token = jsonwebtoken::encode(
-            &jsonwebtoken::Header::default(), 
-            &claims, 
-            &jsonwebtoken::EncodingKey::from_secret(b"my-super-secret-key"),
-        ).unwrap();
-        Some(access_token)
+
+        jsonwebtoken::encode(
+            &jsonwebtoken::Header::default(),
+            &claims,
+            &self.encoding_key,
+        )
+        .ok()
     }
 }
 
@@ -35,10 +46,13 @@ impl TokenEncoderProvider for JwtEncoderProvider {
 mod tests {
     use super::*;
 
+    const TEST_SECRET: &[u8] = b"test-secret-for-unit-tests";
+    const TEST_TTL_MINUTES: u64 = 15;
+
     #[test]
     fn encode_jwt() {
         // Given
-        let jwt_encoder = JwtEncoderProvider;
+        let jwt_encoder = JwtEncoderProvider::new(TEST_SECRET, TEST_TTL_MINUTES);
 
         // When
         let token = jwt_encoder.provide("Qwerty123".to_owned()).unwrap();
@@ -47,4 +61,3 @@ mod tests {
         assert_ne!(token, "Qwerty123".to_owned());
     }
 }
-

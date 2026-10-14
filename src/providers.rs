@@ -1,5 +1,6 @@
 pub mod argon2_hasher;
 pub mod argon2_verifier;
+// pub mod jwt_decoder;
 pub mod jwt_encoder;
 pub mod refresh_token_generator;
 
@@ -9,7 +10,7 @@ pub trait HashFuncProvider {
 
 pub struct PasswordConfirmation {
     pub is_confirmed: bool,
-    pub need_upgrade: bool, 
+    pub need_upgrade: bool,
 }
 
 pub trait HashVerifierProvider {
@@ -21,10 +22,9 @@ pub trait TokenEncoderProvider {
 }
 
 pub trait TokenDecoderProvider {
-    fn provider(&self, token: String) -> Option<String>;
+    fn provide(&self, token: String) -> Option<String>;
 }
 
 pub trait IdProvider {
     fn provide(&self) -> Option<String>;
 }
-

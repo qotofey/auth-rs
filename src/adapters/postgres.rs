@@ -1,25 +1,13 @@
-use sqlx::FromRow;
 use crate::{
-    errors::AppError,
     app::{
-        UserCredential,
-        UserSecret,
-        User,
-        queries::{
-            FindUserCredentialDao,
-            FindUserSecretDao,
-            FindUserDao,
-        },
+        User, UserCredential, UserSecret,
         commands::{
-            RegisterUserDao,
-            AuthenticateUserDao,
-            RefreshSessionDao,
-            ChangePasswordDao, 
-            DeleteUserDao,
-            RestoreUserDao,
-            refresh_session::UserSession,
+            AuthenticateUserDao, ChangePasswordDao, DeleteUserDao, RefreshSessionDao,
+            RegisterUserDao, RestoreUserDao, refresh_session::UserSession,
         },
+        queries::{FindUserCredentialDao, FindUserDao, FindUserSecretDao},
     },
+    errors::AppError,
 };
 
 #[derive(Clone)]
@@ -34,29 +22,35 @@ impl UserRepository {
 }
 
 impl RegisterUserDao for UserRepository {
-    async fn register_user(&self, login_type: String, login: String, password_digest: String) -> Result<(), AppError> {
+    async fn register_user(
+        &self,
+        login_type: String,
+        login: String,
+        password_digest: String,
+    ) -> Result<(), AppError> {
         let mut transaction = match self.pool.begin().await {
             Ok(transaction) => transaction,
             Err(_) => return Err(AppError::UnknownDatabaseError),
         };
 
-        let user = sqlx::query_as::<_, User>(r#"
+        let user = match sqlx::query_as::<_, User>(r#"
                 INSERT INTO users DEFAULT VALUES RETURNING id, first_name, middle_name, last_name, birthdate, gender, blocked_at, deleted_at
             "#)
             .fetch_one(&mut *transaction)
-            .await.unwrap();
-        // {
-        //     Ok(user) => user,
-        //     _ => return Err(AppError::UnknownDatabaseError),
-        // };
+            .await
+        {
+            Ok(user) => user,
+            Err(_) => return Err(AppError::UnknownDatabaseError),
+        };
 
         match sqlx::query("INSERT INTO user_credentials (login, user_id, kind) VALUES ($1, $2, $3)")
             .bind(login)
             .bind(user.id)
             .bind(login_type)
             .execute(&mut *transaction)
-            .await {
-            Ok(_) => {},
+            .await
+        {
+            Ok(_) => {}
             Err(sqlx::Error::Database(db_err)) => {
                 if let Some(pg_err) = db_err.try_downcast_ref::<sqlx::postgres::PgDatabaseError>() {
                     match pg_err.code() {
@@ -66,15 +60,16 @@ impl RegisterUserDao for UserRepository {
                 } else {
                     return Err(AppError::UnknownDatabaseError);
                 }
-            },
+            }
             Err(_) => return Err(AppError::UnknownDatabaseError),
         }
         match sqlx::query("INSERT INTO user_passwords (password_digest, user_id) VALUES ($1, $2)")
             .bind(password_digest)
             .bind(user.id)
             .execute(&mut *transaction)
-            .await {
-            Ok(_) => {},
+            .await
+        {
+            Ok(_) => {}
             Err(_) => return Err(AppError::UnknownDatabaseError),
         }
 
@@ -86,30 +81,42 @@ impl RegisterUserDao for UserRepository {
 }
 
 impl FindUserCredentialDao for UserRepository {
-    async fn find_user_credential_by_login(&self, login: String) -> Result<Option<UserCredential>, AppError> {
-        sqlx::query_as::<_, UserCredential>(r#"
+    async fn find_user_credential_by_login(
+        &self,
+        login: String,
+    ) -> Result<Option<UserCredential>, AppError> {
+        sqlx::query_as::<_, UserCredential>(
+            r#"
             SELECT 
                 id, kind, login, confirmed_at, user_id, login_attempts, locked_until 
             FROM 
                 user_credentials 
             WHERE 
                 login = $1
-            "#)
-            .bind(login)
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(|_| AppError::NotFound)
+            "#,
+        )
+        .bind(login)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|_| AppError::NotFound)
     }
 }
 
 impl AuthenticateUserDao for UserRepository {
-    async fn update_failure_login(&self, id: uuid::Uuid, actual_failure_login_attempts: u16, locked_until: Option<chrono::NaiveDateTime>) -> Result<(), AppError> {
-        let result_of_update = sqlx::query("UPDATE user_credentials SET login_attempts = $1, locked_until = $2 WHERE id = $3")
-            .bind(actual_failure_login_attempts as i16)
-            .bind(locked_until)
-            .bind(id)
-            .execute(&self.pool)
-            .await;
+    async fn update_failure_login(
+        &self,
+        id: uuid::Uuid,
+        actual_failure_login_attempts: u16,
+        locked_until: Option<chrono::NaiveDateTime>,
+    ) -> Result<(), AppError> {
+        let result_of_update = sqlx::query(
+            "UPDATE user_credentials SET login_attempts = $1, locked_until = $2 WHERE id = $3",
+        )
+        .bind(actual_failure_login_attempts as i16)
+        .bind(locked_until)
+        .bind(id)
+        .execute(&self.pool)
+        .await;
 
         match result_of_update {
             Ok(_) => Ok(()),
@@ -117,23 +124,30 @@ impl AuthenticateUserDao for UserRepository {
         }
     }
 
-    async fn create_session(&self, user_credential_id: uuid::Uuid, refresh_token: String) -> Result<(), AppError> {
+    async fn create_session(
+        &self,
+        user_credential_id: uuid::Uuid,
+        refresh_token: String,
+    ) -> Result<(), AppError> {
         let mut transaction = match self.pool.begin().await {
             Ok(transaction) => transaction,
             Err(_) => return Err(AppError::UnknownDatabaseError),
         };
-        match sqlx::query(r#"
+        match sqlx::query(
+            r#"
                 UPDATE user_credentials 
                 SET 
                     login_attempts = 0, 
                     locked_until = NULL,
                     confirmed_at = COALESCE(confirmed_at, CURRENT_TIMESTAMP) 
                 WHERE id = $1
-            "#)
-            .bind(user_credential_id)
-            .execute(&mut *transaction)
-            .await {
-            Ok(_) => {},
+            "#,
+        )
+        .bind(user_credential_id)
+        .execute(&mut *transaction)
+        .await
+        {
+            Ok(_) => {}
             Err(_) => return Err(AppError::UnknownDatabaseError),
         };
         match sqlx::query("UPDATE user_sessions SET disabled_at = CURRENT_TIMESTAMP WHERE user_credential_id = $1 AND disabled_at IS NULL")
@@ -143,12 +157,15 @@ impl AuthenticateUserDao for UserRepository {
             Ok(_) => {},
             Err(_) => return Err(AppError::UnknownDatabaseError),
         };
-        match sqlx::query("INSERT INTO user_sessions (refresh_token, user_credential_id) VALUES ($1, $2)")
-            .bind(refresh_token)
-            .bind(user_credential_id)
-            .execute(&mut *transaction)
-            .await {
-            Ok(_) => {},
+        match sqlx::query(
+            "INSERT INTO user_sessions (refresh_token, user_credential_id) VALUES ($1, $2)",
+        )
+        .bind(refresh_token)
+        .bind(user_credential_id)
+        .execute(&mut *transaction)
+        .await
+        {
+            Ok(_) => {}
             Err(_) => return Err(AppError::UnknownDatabaseError),
         };
 
@@ -160,24 +177,30 @@ impl AuthenticateUserDao for UserRepository {
 }
 
 impl RefreshSessionDao for UserRepository {
-    async fn refresh_session(&self, old_refresh_token: String, new_refresh_token: String) -> Result<Option<UserCredential>, AppError> {
+    async fn refresh_session(
+        &self,
+        old_refresh_token: String,
+        new_refresh_token: String,
+    ) -> Result<Option<UserCredential>, AppError> {
         let mut transaction = match self.pool.begin().await {
             Ok(transaction) => transaction,
             Err(_) => return Err(AppError::UnknownDatabaseError),
         };
 
-        let some_session_or_none = sqlx::query_as::<_, UserSession>(r#"
+        let some_session_or_none = sqlx::query_as::<_, UserSession>(
+            r#"
                 UPDATE user_sessions 
                 SET 
                     disabled_at = CURRENT_TIMESTAMP 
                 WHERE 
                     refresh_token = $1 AND disabled_at IS NULL
                 RETURNING user_credential_id
-            "#)
-            .bind(old_refresh_token)
-            .fetch_optional(&mut *transaction)
-            .await
-            .map_err(|_| AppError::UnknownDatabaseError)?;
+            "#,
+        )
+        .bind(old_refresh_token)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(|_| AppError::UnknownDatabaseError)?;
 
         let session = match some_session_or_none {
             Some(session) => session,
@@ -202,42 +225,57 @@ impl RefreshSessionDao for UserRepository {
             None => return Ok(None),
         };
 
-        let _ = sqlx::query("INSERT INTO user_sessions (refresh_token, user_credential_id) VALUES ($1, $2)")
-            .bind(new_refresh_token)
-            .bind(session.user_credential_id)
-            .execute(&mut *transaction)
+        let _ = sqlx::query(
+            "INSERT INTO user_sessions (refresh_token, user_credential_id) VALUES ($1, $2)",
+        )
+        .bind(new_refresh_token)
+        .bind(session.user_credential_id)
+        .execute(&mut *transaction)
+        .await
+        .map_err(|_| AppError::UnknownDatabaseError);
+        let _ = transaction
+            .commit()
             .await
             .map_err(|_| AppError::UnknownDatabaseError);
-        let _ = transaction.commit().await.map_err(|_| AppError::UnknownDatabaseError);
 
         Ok(Some(credential))
     }
 }
 
 impl FindUserSecretDao for UserRepository {
-    async fn find_user_secret_by_user_id(&self, id: uuid::Uuid) -> Result<Option<UserSecret>, AppError> {
-        sqlx::query_as::<_, UserSecret>(r#"
-            SELECT 
-                id, password_digest, user_id, disabled_at
-            FROM 
+    async fn find_user_secret_by_user_id(
+        &self,
+        id: uuid::Uuid,
+    ) -> Result<Option<UserSecret>, AppError> {
+        sqlx::query_as::<_, UserSecret>(
+            r#"
+            SELECT
+                id, password_digest, user_id
+            FROM
                 user_passwords
-            WHERE 
+            WHERE
                 user_id = $1
-            "#)
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(|_| AppError::UnknownDatabaseError)
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|_| AppError::UnknownDatabaseError)
     }
 }
 
 impl ChangePasswordDao for UserRepository {
-    async fn upgrade_password_digest(&self, user_secret_id: uuid::Uuid, new_password_digest: String) -> Result<(), AppError> {
-        let result_of_update = sqlx::query("UPDATE user_passwords SET password_digest = $1 WHERE id = $2")
-            .bind(new_password_digest)
-            .bind(user_secret_id)
-            .execute(&self.pool)
-            .await;
+    async fn upgrade_password_digest(
+        &self,
+        user_secret_id: uuid::Uuid,
+        new_password_digest: String,
+    ) -> Result<(), AppError> {
+        let result_of_update =
+            sqlx::query("UPDATE user_passwords SET password_digest = $1 WHERE id = $2")
+                .bind(new_password_digest)
+                .bind(user_secret_id)
+                .execute(&self.pool)
+                .await;
 
         match result_of_update {
             Ok(_) => Ok(()),
@@ -248,10 +286,11 @@ impl ChangePasswordDao for UserRepository {
 
 impl DeleteUserDao for UserRepository {
     async fn delete_user_by_id(&self, user_id: uuid::Uuid) -> Result<(), AppError> {
-        let result_of_update = sqlx::query("UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1")
-            .bind(user_id)
-            .execute(&self.pool)
-            .await;
+        let result_of_update =
+            sqlx::query("UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1")
+                .bind(user_id)
+                .execute(&self.pool)
+                .await;
 
         match result_of_update {
             Ok(_) => Ok(()),
@@ -276,17 +315,18 @@ impl RestoreUserDao for UserRepository {
 
 impl FindUserDao for UserRepository {
     async fn find_user_by_id(&self, user_id: uuid::Uuid) -> Result<Option<User>, AppError> {
-        sqlx::query_as::<_, User>(r#"
+        sqlx::query_as::<_, User>(
+            r#"
             SELECT 
                 id, first_name, middle_name, last_name, birthdate, gender, blocked_at, deleted_at
             FROM 
                 users
             WHERE id = $1
-            "#)
-            .bind(user_id)
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(|_| AppError::NotFound)
+            "#,
+        )
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|_| AppError::NotFound)
     }
 }
-

@@ -1,14 +1,29 @@
-pub struct JwtDecoderProvider;
+use jsonwebtoken::DecodingKey;
 
-impl TokenEncoderProvider for JwtDecoderProvider {
+use crate::providers::{TokenDecoderProvider, jwt_encoder::Claims};
+
+pub struct JwtDecoderProvider {
+    decoding_key: jsonwebtoken::DecodingKey,
+}
+
+impl JwtDecoderProvider {
+    pub fn new(secret: &[u8]) -> Self {
+        Self {
+            decoding_key: DecodingKey::from_secret(secret),
+        }
+    }
+}
+
+impl TokenDecoderProvider for JwtDecoderProvider {
     fn provide(&self, token: String) -> Option<String> {
-        // let mut validation = Validation::new(Algorithm::HS256);
-        // validation.validate_exp = true;
-        // validation.required_spec_claims = HashSet::from(["exp".to_owned()]);
-        //
-        // let token_data = decode::<Claims>(token, &self.decoding_key, &validation).map_err(|_| None);
-        //
-        // Some(token_data.claims)
+        let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::HS256);
+        validation.validate_exp = true;
+        validation.required_spec_claims = std::collections::HashSet::from(["exp".to_owned()]);
+
+        let token_data =
+            jsonwebtoken::decode::<Claims>(&token, &self.decoding_key, &validation).ok()?;
+
+        Some(token_data.claims.sub)
     }
 }
 

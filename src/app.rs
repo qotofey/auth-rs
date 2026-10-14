@@ -1,5 +1,5 @@
-pub mod queries;
 pub mod commands;
+pub mod queries;
 
 #[derive(sqlx::FromRow)]
 pub struct UserCredential {
@@ -16,8 +16,7 @@ pub struct UserCredential {
 #[derive(sqlx::FromRow)]
 pub struct UserSecret {
     pub id: uuid::Uuid,
-    #[sqlx(try_from = "uuid::Uuid")]
-    pub user_id: String,
+    pub user_id: uuid::Uuid,
     pub password_digest: String,
 }
 
@@ -32,4 +31,3 @@ pub struct User {
     pub blocked_at: Option<chrono::NaiveDateTime>,
     pub deleted_at: Option<chrono::NaiveDateTime>,
 }
-

@@ -1,25 +1,13 @@
 use crate::{
-    errors::AppError,
-    providers::{
-        HashFuncProvider,
-        HashVerifierProvider,
-        IdProvider,
-        TokenEncoderProvider,
-    },
     app::{
-        queries::{
-            FindUserCredentialDao,
-            FindUserSecretDao,
-        },
         commands::{
-            LOGIN_ATTEMPTS_BEFORE_FIRST_LOCKING,
-            LOGIN_ATTEMPTS_AFTER_FIRST_LOCKING,
-            LOCKING_IN_MINUTES,
-            Session,
-            AuthenticateUserDao,
-            ChangePasswordDao,
+            AuthenticateUserDao, ChangePasswordDao, LOCKING_IN_MINUTES,
+            LOGIN_ATTEMPTS_AFTER_FIRST_LOCKING, LOGIN_ATTEMPTS_BEFORE_FIRST_LOCKING, Session,
         },
+        queries::{FindUserCredentialDao, FindUserSecretDao},
     },
+    errors::AppError,
+    providers::{HashFuncProvider, HashVerifierProvider, IdProvider, TokenEncoderProvider},
 };
 
 pub struct AuthenticateUserCommand<H, V, I, T, A>
@@ -45,7 +33,13 @@ where
     T: TokenEncoderProvider,
     A: FindUserCredentialDao + FindUserSecretDao + AuthenticateUserDao + ChangePasswordDao,
 {
-    pub fn new(hash_func_provider: H, hash_verifier_provider: V, refresh_token_generator: I, access_token_provider: T, repo: A) -> Self {
+    pub fn new(
+        hash_func_provider: H,
+        hash_verifier_provider: V,
+        refresh_token_generator: I,
+        access_token_provider: T,
+        repo: A,
+    ) -> Self {
         Self {
             hash_func_provider,
             hash_verifier_provider,
@@ -56,23 +50,33 @@ where
     }
 
     pub async fn call(&self, login: String, password: String) -> Result<Session, AppError> {
-        let credentail = match self.repo.find_user_credential_by_login(login.trim().to_lowercase()).await {
+        let credentail = match self
+            .repo
+            .find_user_credential_by_login(login.trim().to_lowercase())
+            .await
+        {
             Ok(some_or_none) => match some_or_none {
                 Some(credentail) => credentail,
                 None => return Err(AppError::LoginError),
             },
             Err(_) => {
                 return Err(AppError::UnknownDatabaseError);
-            },
+            }
         };
 
         let is_locked = match credentail.locked_until {
             Some(locked_until) => locked_until > chrono::Utc::now().naive_local(),
             None => false,
         };
-        if is_locked { return Err(AppError::TempLocked) };
+        if is_locked {
+            return Err(AppError::TempLocked);
+        };
 
-        let secret = match self.repo.find_user_secret_by_user_id(credentail.user_id).await {
+        let secret = match self
+            .repo
+            .find_user_secret_by_user_id(credentail.user_id)
+            .await
+        {
             Ok(some_or_none) => match some_or_none {
                 Some(secret) => secret,
                 None => return Err(AppError::LoginError),
@@ -80,24 +84,34 @@ where
             Err(_) => return Err(AppError::UnknownDatabaseError),
         };
 
-        let password_confirmation = self.hash_verifier_provider.provide(password.clone(), secret.password_digest);
+        let password_confirmation = self
+            .hash_verifier_provider
+            .provide(password.clone(), secret.password_digest);
         let is_password_correct = password_confirmation.is_confirmed;
 
         if !is_password_correct {
             let actual_failure_login_attempts = credentail.failure_login_attempts as u16 + 1;
-            let is_subject_locking = 
-                actual_failure_login_attempts >= LOGIN_ATTEMPTS_BEFORE_FIRST_LOCKING &&
-                (actual_failure_login_attempts - LOGIN_ATTEMPTS_BEFORE_FIRST_LOCKING) % LOGIN_ATTEMPTS_AFTER_FIRST_LOCKING == 0;
+            let is_subject_locking = actual_failure_login_attempts
+                >= LOGIN_ATTEMPTS_BEFORE_FIRST_LOCKING
+                && (actual_failure_login_attempts - LOGIN_ATTEMPTS_BEFORE_FIRST_LOCKING)
+                    % LOGIN_ATTEMPTS_AFTER_FIRST_LOCKING
+                    == 0;
 
             // TODO: eсли тут вернётся None блокировка не будет инкрементирована
-            let locked_until = if is_subject_locking { 
+            let locked_until = if is_subject_locking {
                 // TODO: обдумать алгоритм распределения времени блокировки
-                chrono::Utc::now().naive_local().checked_add_signed(chrono::Duration::minutes(LOCKING_IN_MINUTES)) 
+                chrono::Utc::now()
+                    .naive_local()
+                    .checked_add_signed(chrono::Duration::minutes(LOCKING_IN_MINUTES))
             } else {
                 None
             };
-            self.repo.update_failure_login(credentail.id, actual_failure_login_attempts, locked_until).await?;
-            if is_locked { return Err(AppError::TempLocked); }
+            self.repo
+                .update_failure_login(credentail.id, actual_failure_login_attempts, locked_until)
+                .await?;
+            if is_locked {
+                return Err(AppError::TempLocked);
+            }
 
             return Err(AppError::LoginError);
         }
@@ -107,10 +121,12 @@ where
                 Some(hash) => hash,
                 None => {
                     return Err(AppError::UnknownError);
-                },
+                }
             };
 
-            self.repo.upgrade_password_digest(secret.id, password_digest).await?;
+            self.repo
+                .upgrade_password_digest(secret.id, password_digest)
+                .await?;
         }
 
         let refresh_token = match self.refresh_token_generator.provide() {
@@ -118,15 +134,26 @@ where
             None => return Err(AppError::UnknownError),
         };
 
-        let access_token = match self.access_token_provider.provide(secret.user_id) {
+        let access_token = match self
+            .access_token_provider
+            .provide(secret.user_id.to_string())
+        {
             Some(token) => token,
             None => return Err(AppError::UnknownError),
         };
 
         let user_id = credentail.user_id;
 
-        match self.repo.create_session(credentail.id, refresh_token.clone()).await {
-            Ok(_) => Ok(Session { user_id, refresh_token, access_token }),
+        match self
+            .repo
+            .create_session(credentail.id, refresh_token.clone())
+            .await
+        {
+            Ok(_) => Ok(Session {
+                user_id,
+                refresh_token,
+                access_token,
+            }),
             Err(_) => Err(AppError::UnknownDatabaseError),
         }
     }
@@ -135,17 +162,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{adapters, di, providers};
     use testcontainers_modules::{
         postgres,
-        testcontainers::{
-            ImageExt,
-            runners::AsyncRunner,
-        },
-    };
-    use crate::{
-        di,
-        providers,
-        adapters,
+        testcontainers::{ImageExt, runners::AsyncRunner},
     };
 
     #[tokio::test]
@@ -163,13 +183,18 @@ mod tests {
             postgres_container.get_host_port_ipv4(5432).await.unwrap()
         );
 
-        let db_pool = sqlx::postgres::PgPoolOptions::new().max_connections(1).connect(url).await.unwrap();
+        let db_pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(1)
+            .connect(url)
+            .await
+            .unwrap();
         sqlx::migrate!("./migrations").run(&db_pool).await.unwrap();
 
         let argon2_hasher = providers::argon2_hasher::Argon2HasherProvider::new(8, 1, 1);
         let argon2_verifier = providers::argon2_verifier::Argon2VerifierProvider::new(8, 1, 1);
 
-        let refresh_token_generator = providers::refresh_token_generator::RefreshTokenGeneratorProvider;
+        let refresh_token_generator =
+            providers::refresh_token_generator::RefreshTokenGeneratorProvider;
         let jwt_encoder = providers::jwt_encoder::JwtEncoderProvider;
 
         let user_repo = adapters::postgres::UserRepository::new(db_pool.clone());
@@ -184,14 +209,30 @@ mod tests {
             user_repo.clone(),
             user_repo,
         );
-        container.register_user_command.call("username0".to_string(), "Qwerty123!".to_string()).await.unwrap();
+        container
+            .register_user_command
+            .call("username0".to_string(), "Qwerty123!".to_string())
+            .await
+            .unwrap();
 
         // When
-        let initial_user_sessions_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM user_sessions").fetch_one(&db_pool).await.unwrap();
+        let initial_user_sessions_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(1) FROM user_sessions")
+                .fetch_one(&db_pool)
+                .await
+                .unwrap();
 
-        container.authenticate_user_command.call("username0".to_string(), "Qwerty123!".to_string()).await.unwrap();
+        container
+            .authenticate_user_command
+            .call("username0".to_string(), "Qwerty123!".to_string())
+            .await
+            .unwrap();
 
-        let final_user_sessions_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM user_sessions").fetch_one(&db_pool).await.unwrap();
+        let final_user_sessions_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(1) FROM user_sessions")
+                .fetch_one(&db_pool)
+                .await
+                .unwrap();
 
         // Then
         assert_eq!(final_user_sessions_count - initial_user_sessions_count, 1);
@@ -212,13 +253,18 @@ mod tests {
             postgres_container.get_host_port_ipv4(5432).await.unwrap()
         );
 
-        let db_pool = sqlx::postgres::PgPoolOptions::new().max_connections(1).connect(url).await.unwrap();
+        let db_pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(1)
+            .connect(url)
+            .await
+            .unwrap();
         sqlx::migrate!("./migrations").run(&db_pool).await.unwrap();
 
         let argon2_hasher = providers::argon2_hasher::Argon2HasherProvider::new(8, 1, 1);
         let argon2_verifier = providers::argon2_verifier::Argon2VerifierProvider::new(8, 1, 1);
 
-        let refresh_token_generator = providers::refresh_token_generator::RefreshTokenGeneratorProvider;
+        let refresh_token_generator =
+            providers::refresh_token_generator::RefreshTokenGeneratorProvider;
         let jwt_encoder = providers::jwt_encoder::JwtEncoderProvider;
 
         let user_repo = adapters::postgres::UserRepository::new(db_pool.clone());
@@ -233,15 +279,35 @@ mod tests {
             user_repo.clone(),
             user_repo,
         );
-        container.register_user_command.call("username0".to_string(), "Qwerty123!".to_string()).await.unwrap();
-        container.authenticate_user_command.call("username0".to_string(), "Qwerty123!".to_string()).await.unwrap();
+        container
+            .register_user_command
+            .call("username0".to_string(), "Qwerty123!".to_string())
+            .await
+            .unwrap();
+        container
+            .authenticate_user_command
+            .call("username0".to_string(), "Qwerty123!".to_string())
+            .await
+            .unwrap();
 
         // When
-        let initial_user_sessions_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM user_sessions").fetch_one(&db_pool).await.unwrap();
+        let initial_user_sessions_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(1) FROM user_sessions")
+                .fetch_one(&db_pool)
+                .await
+                .unwrap();
 
-        container.authenticate_user_command.call("username0".to_string(), "Qwerty123!".to_string()).await.unwrap();
+        container
+            .authenticate_user_command
+            .call("username0".to_string(), "Qwerty123!".to_string())
+            .await
+            .unwrap();
 
-        let final_user_sessions_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM user_sessions").fetch_one(&db_pool).await.unwrap();
+        let final_user_sessions_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(1) FROM user_sessions")
+                .fetch_one(&db_pool)
+                .await
+                .unwrap();
 
         // Then
         assert_eq!(final_user_sessions_count - initial_user_sessions_count, 1);
@@ -262,13 +328,18 @@ mod tests {
             postgres_container.get_host_port_ipv4(5432).await.unwrap()
         );
 
-        let db_pool = sqlx::postgres::PgPoolOptions::new().max_connections(1).connect(url).await.unwrap();
+        let db_pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(1)
+            .connect(url)
+            .await
+            .unwrap();
         sqlx::migrate!("./migrations").run(&db_pool).await.unwrap();
 
         let argon2_hasher = providers::argon2_hasher::Argon2HasherProvider::new(8, 1, 1);
         let argon2_verifier = providers::argon2_verifier::Argon2VerifierProvider::new(8, 1, 1);
 
-        let refresh_token_generator = providers::refresh_token_generator::RefreshTokenGeneratorProvider;
+        let refresh_token_generator =
+            providers::refresh_token_generator::RefreshTokenGeneratorProvider;
         let jwt_encoder = providers::jwt_encoder::JwtEncoderProvider;
 
         let user_repo = adapters::postgres::UserRepository::new(db_pool.clone());
@@ -283,15 +354,35 @@ mod tests {
             user_repo.clone(),
             user_repo,
         );
-        container.register_user_command.call("username0".to_string(), "Qwerty123!".to_string()).await.unwrap();
-        container.authenticate_user_command.call("username0".to_string(), "Qwerty123!".to_string()).await.unwrap();
+        container
+            .register_user_command
+            .call("username0".to_string(), "Qwerty123!".to_string())
+            .await
+            .unwrap();
+        container
+            .authenticate_user_command
+            .call("username0".to_string(), "Qwerty123!".to_string())
+            .await
+            .unwrap();
 
         // When
-        let initial_user_sessions_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM user_sessions").fetch_one(&db_pool).await.unwrap();
+        let initial_user_sessions_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(1) FROM user_sessions")
+                .fetch_one(&db_pool)
+                .await
+                .unwrap();
 
-        container.authenticate_user_command.call("username0".to_string(), "Qwerty123!".to_string()).await.unwrap();
+        container
+            .authenticate_user_command
+            .call("username0".to_string(), "Qwerty123!".to_string())
+            .await
+            .unwrap();
 
-        let final_user_sessions_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM user_sessions").fetch_one(&db_pool).await.unwrap();
+        let final_user_sessions_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(1) FROM user_sessions")
+                .fetch_one(&db_pool)
+                .await
+                .unwrap();
 
         // Then
         assert_eq!(final_user_sessions_count - initial_user_sessions_count, 1);

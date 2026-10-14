@@ -1,18 +1,13 @@
 use crate::{
-    errors::AppError,
-    providers::{
-        HashFuncProvider,
-        HashVerifierProvider, 
-    },
     app::{
-        queries::{
-            FindUserSecretDao,
-        },
         commands::{
-            UserCredential,
+            // UserCredential,
             ChangePasswordDao,
         },
+        queries::FindUserSecretDao,
     },
+    errors::AppError,
+    providers::{HashFuncProvider, HashVerifierProvider},
 };
 
 pub struct ChangePasswordCommand<H, V, C>
@@ -40,7 +35,12 @@ where
         }
     }
 
-    pub async fn call(&self, user_id: uuid::Uuid, old_password: String, new_password: String) -> Result<(), AppError> {
+    pub async fn call(
+        &self,
+        user_id: uuid::Uuid,
+        old_password: String,
+        new_password: String,
+    ) -> Result<(), AppError> {
         let secret = match self.repo.find_user_secret_by_user_id(user_id).await {
             Ok(some_or_none) => match some_or_none {
                 Some(secret) => secret,
@@ -48,7 +48,9 @@ where
             },
             Err(_) => return Err(AppError::UnknownDatabaseError),
         };
-        let password_confirmation = self.hash_verifier_provider.provide(old_password, secret.password_digest);
+        let password_confirmation = self
+            .hash_verifier_provider
+            .provide(old_password, secret.password_digest);
         let is_password_correct = password_confirmation.is_confirmed;
 
         if !is_password_correct {
@@ -59,10 +61,14 @@ where
             Some(hash) => hash,
             None => {
                 return Err(AppError::UnknownError);
-            },
+            }
         };
 
-        match self.repo.upgrade_password_digest(secret.id, new_password_digest).await {
+        match self
+            .repo
+            .upgrade_password_digest(secret.id, new_password_digest)
+            .await
+        {
             Ok(_) => Ok(()),
             Err(_) => return Err(AppError::UnknownDatabaseError),
         }

@@ -1,14 +1,11 @@
 use crate::{
-    errors::AppError,
-    providers::{
-        IdProvider, 
-        TokenEncoderProvider,
-    },
     app::commands::{
-        Session,
-        UserCredential,
+        // UserCredential,
         RefreshSessionDao,
+        Session,
     },
+    errors::AppError,
+    providers::{IdProvider, TokenEncoderProvider},
 };
 
 pub struct RefreshSessionCommand<I, T, R>
@@ -27,14 +24,18 @@ pub struct UserSession {
     pub user_credential_id: uuid::Uuid,
 }
 
-impl<I, T, R> RefreshSessionCommand<I, T, R> 
+impl<I, T, R> RefreshSessionCommand<I, T, R>
 where
     I: IdProvider,
     T: TokenEncoderProvider,
-    R: RefreshSessionDao
+    R: RefreshSessionDao,
 {
     pub fn new(id_provider: I, token_provider: T, repo: R) -> Self {
-        Self { id_provider, token_provider, repo }
+        Self {
+            id_provider,
+            token_provider,
+            repo,
+        }
     }
 
     pub async fn call(&self, old_refresh_token: String) -> Result<Session, AppError> {
@@ -43,14 +44,17 @@ where
             None => return Err(AppError::LoginRequired),
         };
 
-        let result_some_credential_or_none = self.repo.refresh_session(old_refresh_token, new_refresh_token.clone()).await;
+        let result_some_credential_or_none = self
+            .repo
+            .refresh_session(old_refresh_token, new_refresh_token.clone())
+            .await;
         let some_credential_or_none = match result_some_credential_or_none {
             Ok(some_credential_or_none) => some_credential_or_none,
             Err(_) => return Err(AppError::UnknownDatabaseError),
         };
         let credential = match some_credential_or_none {
             Some(credential) => credential,
-            None => return Err(AppError::LoginRequired)
+            None => return Err(AppError::LoginRequired),
         };
 
         let access_token = match self.token_provider.provide(credential.user_id.to_string()) {
@@ -60,6 +64,10 @@ where
 
         let refresh_token = new_refresh_token;
         let user_id = credential.user_id;
-        Ok(Session { user_id, refresh_token, access_token })
+        Ok(Session {
+            user_id,
+            refresh_token,
+            access_token,
+        })
     }
 }

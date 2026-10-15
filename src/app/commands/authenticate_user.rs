@@ -97,7 +97,10 @@ where
                     % LOGIN_ATTEMPTS_AFTER_FIRST_LOCKING
                     == 0;
 
+            // TODO: обработать случай, когда checked_add_signed вернёт None
+            // (блокировка не будет выставлена, но счётчик инкрементируется)
             let locked_until = if is_subject_locking {
+                // TODO: подумать над стратегией блокировки (экспоненциальная/ступенчатая)
                 chrono::Utc::now()
                     .naive_local()
                     .checked_add_signed(chrono::Duration::minutes(LOCKING_IN_MINUTES))

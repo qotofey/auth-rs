@@ -32,7 +32,7 @@ impl Config {
             .unwrap()
             .set_default("jwt_access_token_ttl_minutes", 15)
             .unwrap()
-            .add_source(config::Environment::default())
+            .add_source(config::Environment::default().separator("__"))
             .build()
             .unwrap();
 

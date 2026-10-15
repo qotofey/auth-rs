@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 argon2 = { version = "0.5.3", features = ["std"] }
+axum = "0.8.9"
 base64 = "0.22.1"
 chrono = "0.4.42"
 config = "0.15.19"
@@ -27,3 +28,4 @@ validator = { version = "0.20.0", features = ["derive"] }
 [dev-dependencies]
 testcontainers = "0.25.0"
 testcontainers-modules = { version = "0.13.0", features = ["postgres"] }
+tower = { version = "0.5", features = ["util"] }

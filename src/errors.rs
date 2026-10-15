@@ -1,5 +1,10 @@
 use std::fmt::{self, Display, Formatter};
 
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
+
 #[derive(thiserror::Error, Debug)]
 pub enum AppError {
     UsernameIsTaken,
@@ -27,3 +32,20 @@ impl Display for AppError {
     }
 }
 
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        let status = match self {
+            AppError::UsernameIsTaken => StatusCode::CONFLICT,
+            AppError::LoginError => StatusCode::UNAUTHORIZED,
+            AppError::TempLocked => StatusCode::TOO_MANY_REQUESTS,
+            AppError::LoginRequired => StatusCode::UNAUTHORIZED,
+            AppError::NotFound => StatusCode::NOT_FOUND,
+            AppError::WeakPassword => StatusCode::BAD_REQUEST,
+            AppError::UnknownDatabaseError | AppError::UnknownError => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
+        };
+
+        (status, self.to_string()).into_response()
+    }
+}

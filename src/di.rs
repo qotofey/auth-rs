@@ -1,4 +1,5 @@
 use crate::{
+    adapters::postgres::UserRepository,
     app::{
         commands::{
             AuthenticateUserDao, ChangePasswordDao, DeleteUserDao, RefreshSessionDao,
@@ -9,7 +10,11 @@ use crate::{
         },
         queries::{FindUserCredentialDao, FindUserSecretDao},
     },
-    providers::{HashFuncProvider, HashVerifierProvider, IdProvider, TokenEncoderProvider},
+    providers::{
+        HashFuncProvider, HashVerifierProvider, IdProvider, TokenEncoderProvider,
+        argon2_hasher::Argon2HasherProvider, argon2_verifier::Argon2VerifierProvider,
+        jwt_encoder::JwtEncoderProvider, refresh_token_generator::RefreshTokenGeneratorProvider,
+    },
 };
 
 pub struct Container<H, V, I, T, R, A, S, D, C>
@@ -86,3 +91,18 @@ where
         }
     }
 }
+
+/// Конкретная конфигурация контейнера для приложения.
+/// Нужна, чтобы хендлеры в `transports/web.rs` были недженерик и реализовывали `Handler`
+/// (в axum 0.8 генерик-функции не выводят trait `Handler`).
+pub type AppContainer = Container<
+    Argon2HasherProvider,
+    Argon2VerifierProvider,
+    RefreshTokenGeneratorProvider,
+    JwtEncoderProvider,
+    UserRepository,
+    UserRepository,
+    UserRepository,
+    UserRepository,
+    UserRepository,
+>;

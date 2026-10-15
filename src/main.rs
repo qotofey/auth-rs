@@ -19,7 +19,6 @@ const ARGON2_PARALLELISM: u32 = 1;
 #[tokio::main]
 async fn main() {
     let conf = config::Config::init();
-    println!("SERVER_URL={}:{}", conf.server.host, conf.server.port);
 
     let db_pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(conf.database_max_connections as u32)
@@ -37,7 +36,6 @@ async fn main() {
         ARGON2_TIME_COST,
         ARGON2_PARALLELISM,
     );
-
     let refresh_token_generator = providers::refresh_token_generator::RefreshTokenGeneratorProvider;
     let jwt_encoder = providers::jwt_encoder::JwtEncoderProvider::new(
         conf.jwt_secret.as_bytes(),
@@ -58,5 +56,5 @@ async fn main() {
     ));
 
     let server = Server::new(container);
-    server.run(conf.server.port).await;
+    server.run(&conf.server.host, conf.server.port).await;
 }

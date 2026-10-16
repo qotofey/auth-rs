@@ -1,0 +1,15 @@
+errors:
+  username_taken: "Username is taken"
+  unknown_database_error: "Unknown database error"
+  weak_password: "Weak password"
+  unknown_error: "Unknown system error"
+  login_error: "Incorrect login or password"
+  temp_locked: "Temporarily locked"
+  login_required: "Login required"
+  not_found: "Not Found"
+  validation_failed: "Validation failed"
+
+validation:
+  username_length: "Username length must be between %{min} and %{max}"
+  username_blank: "Username must not be blank"
+  password_length: "Password length must be between %{min} and %{max}"

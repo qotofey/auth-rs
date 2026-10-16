@@ -4,6 +4,11 @@ use std::sync::Arc;
 
 use crate::transports::web::Server;
 
+#[macro_use]
+extern crate rust_i18n;
+
+i18n!("locales", fallback = "ru");
+
 pub mod adapters;
 pub mod app;
 pub mod config;
@@ -12,13 +17,16 @@ pub mod errors;
 pub mod providers;
 pub mod transports;
 
-const ARGON2_MEMORY_COST: u32 = 8; //32768;
+const ARGON2_MEMORY_COST: u32 = 8;
 const ARGON2_TIME_COST: u32 = 2;
 const ARGON2_PARALLELISM: u32 = 1;
 
 #[tokio::main]
 async fn main() {
     let conf = config::Config::init();
+
+    // устанавливаем локаль по умолчанию - русский
+    rust_i18n::set_locale("ru");
 
     let db_pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(conf.database_max_connections as u32)

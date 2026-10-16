@@ -1,0 +1,15 @@
+errors:
+  username_taken: "Имя пользователя занято"
+  unknown_database_error: "Неизвестная ошибка базы данных"
+  weak_password: "Слабый пароль"
+  unknown_error: "Неизвестная системная ошибка"
+  login_error: "Неверный логин или пароль"
+  temp_locked: "Временно заблокировано"
+  login_required: "Требуется вход"
+  not_found: "Не найдено"
+  validation_failed: "Ошибка валидации"
+
+validation:
+  username_length: "Имя пользователя должно быть длиной от %{min} до %{max}"
+  username_blank: "Имя пользователя не должно быть пустым"
+  password_length: "Пароль должен быть длиной от %{min} до %{max}"

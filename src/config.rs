@@ -32,6 +32,12 @@ impl Config {
             .unwrap()
             .set_default("jwt_access_token_ttl_minutes", 15)
             .unwrap()
+            .set_default("argon2.memory_cost", 8)
+            .unwrap()
+            .set_default("argon2.time_cost", 2)
+            .unwrap()
+            .set_default("argon2.parallelism", 1)
+            .unwrap()
             .add_source(config::Environment::default().separator("__"))
             .build()
             .unwrap();

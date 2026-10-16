@@ -1,6 +1,13 @@
 use std::sync::Arc;
 
-use axum::{Json, Router, extract::State, http::StatusCode, routing::post};
+use axum::{
+    Json, Router,
+    extract::{Request, State},
+    http::StatusCode,
+    middleware::{self, Next},
+    response::Response,
+    routing::post,
+};
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
@@ -27,7 +34,26 @@ impl Server {
 fn get_router(container: Arc<AppContainer>) -> Router {
     Router::new()
         .route("/api/v1/user", post(register_user))
+        .layer(middleware::from_fn(with_lang))
         .with_state(container)
+}
+
+async fn with_lang(request: Request, next: Next) -> Response {
+    let lang = request
+        .headers()
+        .get("accept-language")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| {
+            if s.starts_with("ru") || s.contains(",ru") || s.contains(" ru") {
+                "ru"
+            } else {
+                "en"
+            }
+        })
+        .unwrap_or("ru"); // по умолчанию русский
+
+    rust_i18n::set_locale(lang);
+    next.run(request).await
 }
 
 async fn register_user(

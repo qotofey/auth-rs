@@ -53,25 +53,20 @@ impl ErrorObject {
     }
 }
 
-fn format_validation_error(field: impl AsRef<str>, err: &ValidationError) -> String {
-    let field = field.as_ref();
+fn format_validation_error(field: &str, err: &ValidationError) -> String {
     match err.code.as_ref() {
         "length" => {
-            let min = err.params.get("min").and_then(|v| v.as_u64());
-            let max = err.params.get("max").and_then(|v| v.as_u64());
-            match (min, max) {
-                (Some(min), Some(max)) => {
-                    format!("{} length must be between {} and {}", field, min, max)
-                }
-                (Some(min), None) => format!("{} must be at least {} characters", field, min),
-                (None, Some(max)) => format!("{} must be at most {} characters", field, max),
-                (None, None) => format!("{} has invalid length", field),
-            }
+            let min = err.params.get("min").and_then(|v| v.as_u64()).unwrap_or(0);
+            let max = err.params.get("max").and_then(|v| v.as_u64()).unwrap_or(0);
+            // Определяем, к какому полю относится ошибка
+            let key = if field == "username" {
+                "validation.username_length"
+            } else {
+                "validation.password_length"
+            };
+            t!(key, min = min, max = max).to_string()
         }
-        "range" => format!("{} is out of range", field),
-        "email" => format!("{} must be a valid email", field),
-        "required" => format!("{} is required", field),
-        "blank" => format!("{} must not be blank", field),
+        "blank" => t!("validation.username_blank").to_string(),
         other => format!("{}: {}", field, other),
     }
 }
@@ -109,5 +104,6 @@ pub fn collect_validation_errors(
             }
         }
     }
+
     result
 }

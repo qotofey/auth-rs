@@ -1,9 +1,15 @@
 use std::fmt::{self, Display, Formatter};
 
 use axum::{
-    http::StatusCode,
+    Json,
+    http::{
+        StatusCode,
+        header::{CONTENT_TYPE, HeaderValue},
+    },
     response::{IntoResponse, Response},
 };
+
+use crate::transports::jsonapi::{ErrorDocument, ErrorObject};
 
 #[derive(thiserror::Error, Debug)]
 pub enum AppError {
@@ -15,6 +21,8 @@ pub enum AppError {
     TempLocked,
     LoginRequired,
     NotFound,
+    InvalidInput(String),
+    Validation(Vec<ErrorObject>),
 }
 
 impl Display for AppError {
@@ -28,24 +36,63 @@ impl Display for AppError {
             AppError::TempLocked => write!(f, "Temporarily locked"),
             AppError::LoginRequired => write!(f, "Login required"),
             AppError::NotFound => write!(f, "Not Found"),
+            AppError::InvalidInput(msg) => write!(f, "{}", msg),
+            AppError::Validation(errors) => {
+                write!(f, "Validation failed: {} error(s)", errors.len())
+            }
         }
     }
 }
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        let status = match self {
-            AppError::UsernameIsTaken => StatusCode::CONFLICT,
-            AppError::LoginError => StatusCode::UNAUTHORIZED,
-            AppError::TempLocked => StatusCode::TOO_MANY_REQUESTS,
-            AppError::LoginRequired => StatusCode::UNAUTHORIZED,
-            AppError::NotFound => StatusCode::NOT_FOUND,
-            AppError::WeakPassword => StatusCode::BAD_REQUEST,
-            AppError::UnknownDatabaseError | AppError::UnknownError => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
+        // Особый случай: Validation несёт уже готовый список ошибок.
+        if let AppError::Validation(errors) = self {
+            let doc = ErrorDocument { errors };
+            return (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                [(
+                    CONTENT_TYPE,
+                    HeaderValue::from_static("application/vnd.api+json"),
+                )],
+                Json(doc),
+            )
+                .into_response();
+        }
+
+        let (status, detail) = match &self {
+            AppError::UsernameIsTaken => (StatusCode::CONFLICT, "Username is taken".to_string()),
+            AppError::UnknownDatabaseError | AppError::UnknownError => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal server error".to_string(),
+            ),
+            AppError::WeakPassword => (StatusCode::BAD_REQUEST, "Weak password".to_string()),
+            AppError::LoginError => (
+                StatusCode::UNAUTHORIZED,
+                "Incorrect login or password".to_string(),
+            ),
+            AppError::TempLocked => (
+                StatusCode::TOO_MANY_REQUESTS,
+                "Temporarily locked".to_string(),
+            ),
+            AppError::LoginRequired => (StatusCode::UNAUTHORIZED, "Login required".to_string()),
+            AppError::NotFound => (StatusCode::NOT_FOUND, "Not Found".to_string()),
+            AppError::InvalidInput(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
+            AppError::Validation(_) => unreachable!("handled above"),
         };
 
-        (status, self.to_string()).into_response()
+        let doc = ErrorDocument {
+            errors: vec![ErrorObject::new(status.as_str(), detail)],
+        };
+
+        (
+            status,
+            [(
+                CONTENT_TYPE,
+                HeaderValue::from_static("application/vnd.api+json"),
+            )],
+            Json(doc),
+        )
+            .into_response()
     }
 }

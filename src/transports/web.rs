@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use axum::{Json, Router, extract::State, http::StatusCode, routing::post};
 use serde::{Deserialize, Serialize};
+use validator::Validate;
 
-use crate::{di::AppContainer, errors::AppError};
+use crate::{di::AppContainer, errors::AppError, transports::jsonapi::collect_validation_errors};
 
 pub struct Server {
     container: Arc<AppContainer>,
@@ -32,24 +33,58 @@ fn get_router(container: Arc<AppContainer>) -> Router {
 async fn register_user(
     State(container): State<Arc<AppContainer>>,
     Json(input): Json<RegisterUserRequest>,
-) -> Result<(StatusCode, Json<MetaResponse>), AppError> {
+) -> Result<(StatusCode, Json<serde_json::Value>), AppError> {
+    if let Err(errors) = input.data.attributes.validate() {
+        let api_errors = collect_validation_errors(&errors, "/data/attributes");
+        return Err(AppError::Validation(api_errors));
+    }
+
     container
         .register_user_command
-        .call(input.username, input.password)
+        .call(
+            input.data.attributes.username,
+            input.data.attributes.password,
+        )
         .await?;
 
     Ok((
         StatusCode::CREATED,
-        Json(MetaResponse {
-            version: "1.1".to_string(),
-        }),
+        Json(serde_json::json!({
+            "meta": {
+                "version": "1.1"
+            }
+        })),
     ))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct RegisterUserRequest {
+    pub data: RegisterUserData,
+}
+
+#[derive(Deserialize, Validate)]
+pub struct RegisterUserData {
+    #[serde(rename = "type")]
+    pub resource_type: String,
+    pub attributes: RegisterUserAttributes,
+}
+
+#[derive(Deserialize, Validate)]
+pub struct RegisterUserAttributes {
+    #[validate(
+        length(min = 2, max = 50),
+        custom(function = "validate_non_blank_username")
+    )]
     pub username: String,
+    #[validate(length(min = 8, max = 100))]
     pub password: String,
+}
+
+fn validate_non_blank_username(username: &str) -> Result<(), validator::ValidationError> {
+    if username.trim().is_empty() {
+        return Err(validator::ValidationError::new("blank"));
+    }
+    Ok(())
 }
 
 #[derive(Serialize)]

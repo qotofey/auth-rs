@@ -167,7 +167,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{adapters, di, providers};
+    use crate::{adapters, app::NewUserProfile, di, providers};
     use testcontainers_modules::{
         postgres,
         testcontainers::{ImageExt, runners::AsyncRunner},
@@ -175,6 +175,10 @@ mod tests {
 
     const TEST_JWT_SECRET: &[u8] = b"test-secret-for-unit-tests";
     const TEST_JWT_TTL_MINUTES: u64 = 15;
+
+    fn empty_profile() -> NewUserProfile {
+        NewUserProfile::default()
+    }
 
     #[tokio::test]
     async fn first_authenticate_user_command() {
@@ -220,7 +224,11 @@ mod tests {
         );
         container
             .register_user_command
-            .call("username0".to_string(), "Qwerty123!".to_string())
+            .call(
+                "username0".to_string(),
+                "Qwerty123!".to_string(),
+                empty_profile(),
+            )
             .await
             .unwrap();
 
@@ -291,7 +299,11 @@ mod tests {
         );
         container
             .register_user_command
-            .call("username0".to_string(), "Qwerty123!".to_string())
+            .call(
+                "username0".to_string(),
+                "Qwerty123!".to_string(),
+                empty_profile(),
+            )
             .await
             .unwrap();
         container
@@ -367,7 +379,11 @@ mod tests {
         );
         container
             .register_user_command
-            .call("username0".to_string(), "Qwerty123!".to_string())
+            .call(
+                "username0".to_string(),
+                "Qwerty123!".to_string(),
+                empty_profile(),
+            )
             .await
             .unwrap();
         container
@@ -433,7 +449,11 @@ mod tests {
         );
         container
             .register_user_command
-            .call("username0".to_string(), "Qwerty123!".to_string())
+            .call(
+                "username0".to_string(),
+                "Qwerty123!".to_string(),
+                empty_profile(),
+            )
             .await
             .unwrap();
 

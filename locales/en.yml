@@ -8,8 +8,21 @@ errors:
   login_required: "Login required"
   not_found: "Not Found"
   validation_failed: "Validation failed"
+  unsupported_media_type: "Unsupported media type, expected application/vnd.api+json"
 
 validation:
   username_length: "Username length must be between %{min} and %{max}"
   username_blank: "Username must not be blank"
   password_length: "Password length must be between %{min} and %{max}"
+  login_blank: "Login must not be blank"
+  password_blank: "Password must not be blank"
+  first_name_max: "First name must not exceed %{max} characters"
+  middle_name_max: "Middle name must not exceed %{max} characters"
+  last_name_max: "Last name must not exceed %{max} characters"
+  gender_invalid: "Invalid gender, expected female or male"
+  birthdate_invalid: "Invalid birthdate, expected YYYY-MM-DD"
+
+serde:
+  missing_field: 'The request is missing required field "%{field}"'
+  invalid_body: "Request body does not match the expected structure"
+  invalid_json: "Request body is not valid JSON"

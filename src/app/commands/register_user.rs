@@ -1,4 +1,8 @@
-use crate::{app::commands::RegisterUserDao, errors::AppError, providers::HashFuncProvider};
+use crate::{
+    app::{NewUserProfile, commands::RegisterUserDao},
+    errors::AppError,
+    providers::HashFuncProvider,
+};
 
 pub struct RegisterUserCommand<H, R>
 where
@@ -21,19 +25,25 @@ where
         }
     }
 
-    pub async fn call(&self, username: String, password: String) -> Result<(), AppError> {
-        let password_digest = match self.hash_func_provider.provide(password) {
-            Some(hash) => hash,
-            None => {
-                return Err(AppError::UnknownError);
-            }
-        };
-        let login_type = "username".to_string();
-        self.repo
-            .register_user(login_type, username.trim().to_lowercase(), password_digest)
-            .await?;
+    pub async fn call(
+        &self,
+        username: String,
+        password: String,
+        profile: NewUserProfile,
+    ) -> Result<(), AppError> {
+        let password_digest = self
+            .hash_func_provider
+            .provide(password)
+            .ok_or(AppError::UnknownError)?;
 
-        Ok(())
+        self.repo
+            .register_user(
+                "username".to_string(),
+                username.trim().to_lowercase(),
+                password_digest,
+                profile,
+            )
+            .await
     }
 }
 
@@ -45,6 +55,10 @@ mod tests {
         postgres,
         testcontainers::{ImageExt, runners::AsyncRunner},
     };
+
+    fn empty_profile() -> NewUserProfile {
+        NewUserProfile::default()
+    }
 
     #[tokio::test]
     async fn first_call_register_user_command() {
@@ -105,7 +119,11 @@ mod tests {
 
         container
             .register_user_command
-            .call("user0".to_string(), "Qwerty123!".to_string())
+            .call(
+                "user0".to_string(),
+                "Qwerty123!".to_string(),
+                empty_profile(),
+            )
             .await
             .unwrap();
 
@@ -177,7 +195,11 @@ mod tests {
         );
         container
             .register_user_command
-            .call("user0".to_string(), "Qwerty123!".to_string())
+            .call(
+                "user0".to_string(),
+                "Qwerty123!".to_string(),
+                empty_profile(),
+            )
             .await
             .unwrap();
 
@@ -199,7 +221,7 @@ mod tests {
 
         let res = container
             .register_user_command
-            .call("user0".to_string(), "123123".to_string())
+            .call("user0".to_string(), "123123".to_string(), empty_profile())
             .await;
 
         let final_users_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM users")
@@ -273,7 +295,11 @@ mod tests {
         // When
         let res = container
             .register_user_command
-            .call(" \tuser0 \r\n  ".to_string(), "123123".to_string())
+            .call(
+                " \tuser0 \r\n  ".to_string(),
+                "123123".to_string(),
+                empty_profile(),
+            )
             .await;
 
         // Then

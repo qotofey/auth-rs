@@ -1,6 +1,6 @@
 use crate::{
     app::{
-        User, UserCredential, UserSecret,
+        NewUserProfile, User, UserCredential, UserSecret,
         commands::{
             AuthenticateUserDao, ChangePasswordDao, DeleteUserDao, RefreshSessionDao,
             RegisterUserDao, RestoreUserDao, refresh_session::UserSession,
@@ -27,20 +27,35 @@ impl RegisterUserDao for UserRepository {
         login_type: String,
         login: String,
         password_digest: String,
+        profile: NewUserProfile,
     ) -> Result<(), AppError> {
         let mut transaction = match self.pool.begin().await {
-            Ok(transaction) => transaction,
-            Err(_) => return Err(AppError::UnknownDatabaseError),
+            Ok(t) => t,
+            Err(_) => {
+                return Err(AppError::UnknownDatabaseError);
+            }
         };
 
-        let user = match sqlx::query_as::<_, User>(r#"
-                INSERT INTO users DEFAULT VALUES RETURNING id, first_name, middle_name, last_name, birthdate, gender, blocked_at, deleted_at
-            "#)
-            .fetch_one(&mut *transaction)
-            .await
+        let user = match sqlx::query_as::<_, User>(
+            r#"
+                INSERT INTO users (first_name, middle_name, last_name, birthdate, gender)
+                VALUES ($1, $2, $3, $4, $5)
+                RETURNING id, first_name, middle_name, last_name, birthdate, gender,
+                          blocked_at, deleted_at
+            "#,
+        )
+        .bind(profile.first_name)
+        .bind(profile.middle_name)
+        .bind(profile.last_name)
+        .bind(profile.birthdate)
+        .bind(profile.gender)
+        .fetch_one(&mut *transaction)
+        .await
         {
             Ok(user) => user,
-            Err(_) => return Err(AppError::UnknownDatabaseError),
+            Err(_) => {
+                return Err(AppError::UnknownDatabaseError);
+            }
         };
 
         match sqlx::query("INSERT INTO user_credentials (login, user_id, kind) VALUES ($1, $2, $3)")
@@ -55,14 +70,24 @@ impl RegisterUserDao for UserRepository {
                 if let Some(pg_err) = db_err.try_downcast_ref::<sqlx::postgres::PgDatabaseError>() {
                     match pg_err.code() {
                         "23505" => return Err(AppError::UsernameIsTaken),
-                        _ => return Err(AppError::UnknownDatabaseError),
+                        "23514" => {
+                            return Err(AppError::InvalidInput(
+                                "username must not be empty".to_string(),
+                            ));
+                        }
+                        _ => {
+                            return Err(AppError::UnknownDatabaseError);
+                        }
                     }
                 } else {
                     return Err(AppError::UnknownDatabaseError);
                 }
             }
-            Err(_) => return Err(AppError::UnknownDatabaseError),
+            Err(_) => {
+                return Err(AppError::UnknownDatabaseError);
+            }
         }
+
         match sqlx::query("INSERT INTO user_passwords (password_digest, user_id) VALUES ($1, $2)")
             .bind(password_digest)
             .bind(user.id)
@@ -70,7 +95,9 @@ impl RegisterUserDao for UserRepository {
             .await
         {
             Ok(_) => {}
-            Err(_) => return Err(AppError::UnknownDatabaseError),
+            Err(_) => {
+                return Err(AppError::UnknownDatabaseError);
+            }
         }
 
         match transaction.commit().await {

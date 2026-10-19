@@ -8,8 +8,21 @@ errors:
   login_required: "Требуется вход"
   not_found: "Не найдено"
   validation_failed: "Ошибка валидации"
+  unsupported_media_type: "Неподдерживаемый тип содержимого, ожидается application/vnd.api+json"
 
 validation:
   username_length: "Имя пользователя должно быть длиной от %{min} до %{max}"
   username_blank: "Имя пользователя не должно быть пустым"
   password_length: "Пароль должен быть длиной от %{min} до %{max}"
+  login_blank: "Логин не должен быть пустым"
+  password_blank: "Пароль не должен быть пустым"
+  first_name_max: "Имя не должно превышать %{max} символов"
+  middle_name_max: "Отчество не должно превышать %{max} символов"
+  last_name_max: "Фамилия не должна превышать %{max} символов"
+  gender_invalid: "Недопустимое значение пола, ожидается female или male"
+  birthdate_invalid: "Некорректная дата рождения, ожидается формат YYYY-MM-DD"
+
+serde:
+  missing_field: 'В запросе отсутствует обязательное поле "%{field}"'
+  invalid_body: "Тело запроса не соответствует ожидаемой структуре"
+  invalid_json: "Тело запроса не является корректным JSON"

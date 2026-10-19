@@ -23,6 +23,7 @@ pub enum AppError {
     NotFound,
     InvalidInput(String),
     Validation(Vec<ErrorObject>),
+    UnsupportedMediaType,
 }
 
 impl Display for AppError {
@@ -45,12 +46,16 @@ impl Display for AppError {
                     errors.len()
                 )
             }
+            AppError::UnsupportedMediaType => {
+                write!(f, "{}", t!("errors.unsupported_media_type"))
+            }
         }
     }
 }
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
+        // Validation — уже готовый список ошибок с 422.
         if let AppError::Validation(errors) = self {
             let doc = ErrorDocument { errors };
             return (
@@ -64,38 +69,49 @@ impl IntoResponse for AppError {
                 .into_response();
         }
 
-        let (status, detail) = match &self {
+        let (status, error) = match &self {
             AppError::UsernameIsTaken => (
                 StatusCode::CONFLICT,
-                t!("errors.username_taken").to_string(),
+                ErrorObject::new("409", t!("errors.username_taken")),
             ),
             AppError::UnknownDatabaseError | AppError::UnknownError => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                t!("errors.unknown_error").to_string(),
+                ErrorObject::new("500", t!("errors.unknown_error")),
             ),
             AppError::WeakPassword => (
                 StatusCode::BAD_REQUEST,
-                t!("errors.weak_password").to_string(),
+                ErrorObject::new("400", t!("errors.weak_password")),
             ),
             AppError::LoginError => (
                 StatusCode::UNAUTHORIZED,
-                t!("errors.login_error").to_string(),
+                ErrorObject::new("401", t!("errors.login_error")),
             ),
             AppError::TempLocked => (
                 StatusCode::TOO_MANY_REQUESTS,
-                t!("errors.temp_locked").to_string(),
+                ErrorObject::new("429", t!("errors.temp_locked")),
             ),
             AppError::LoginRequired => (
                 StatusCode::UNAUTHORIZED,
-                t!("errors.login_required").to_string(),
+                ErrorObject::new("401", t!("errors.login_required")),
             ),
-            AppError::NotFound => (StatusCode::NOT_FOUND, t!("errors.not_found").to_string()),
-            AppError::InvalidInput(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
+            AppError::NotFound => (
+                StatusCode::NOT_FOUND,
+                ErrorObject::new("404", t!("errors.not_found")),
+            ),
+            AppError::InvalidInput(msg) => (
+                StatusCode::BAD_REQUEST,
+                ErrorObject::new("400", msg.clone()),
+            ),
             AppError::Validation(_) => unreachable!("handled above"),
+            AppError::UnsupportedMediaType => (
+                StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                ErrorObject::new("415", t!("errors.unsupported_media_type"))
+                    .with_header("Content-Type"),
+            ),
         };
 
         let doc = ErrorDocument {
-            errors: vec![ErrorObject::new(status.as_str(), detail)],
+            errors: vec![error],
         };
 
         (
